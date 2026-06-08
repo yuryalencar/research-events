@@ -133,7 +133,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 │
 ├── migrations/         # Goose SQL files
 ├── specs/              # feature specs (written before any code)
-├── learn/              # notes and references for learning Go and FP
+├── docs/               # learning notes (Go concepts, FP, backend libraries)
 └── ai-sessions/        # session summaries for context recovery
 ```
 
@@ -143,13 +143,13 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 
 | Date | Session | Summary |
 |------|---------|---------|
-| _none yet_ | | |
+| 2026-06-08 | [Server Bootstrap + Health Check](ai-sessions/2026-06-08-server-bootstrap-health-check.md) | Go server wired: config, DB ping, CORS, `GET /health` extensible checker, graceful shutdown. 21 tests. |
 
 ## Specs
 
 | Feature | Spec | Status |
 |---------|------|--------|
-| _none yet_ | | |
+| Server Bootstrap + Health Check | [server-bootstrap.yaml](specs/backend/server-bootstrap.yaml) | Done |
 
 ---
 

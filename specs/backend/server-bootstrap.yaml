@@ -1,0 +1,154 @@
+feature: Server Bootstrap + Health Check
+
+description: >
+  Bootstraps the Go HTTP server: parses configuration from environment variables,
+  opens a GORM connection to Postgres and pings it at startup, registers a global
+  hand-written CORS middleware, registers all initial routes (/health only at this
+  stage), starts the HTTP server, and handles graceful shutdown on SIGTERM/SIGINT.
+
+endpoints:
+  - GET /health
+
+# --- Configuration ---
+
+config:
+  env_vars:
+    PORT:
+      type: string
+      default: "8080"
+      required: false
+    DATABASE_URL:
+      type: string
+      required: true
+      note: >
+        App must refuse to start (log.Fatal) if this is missing or empty.
+        Include a clear message: "DATABASE_URL is required but not set".
+    ENV:
+      type: string
+      default: "development"
+      required: false
+      values: [development, production]
+    CORS_ALLOWED_ORIGINS:
+      type: string
+      default: "*"
+      required: false
+      note: >
+        Accepts a comma-separated list of origins. Defaults to * in all envs
+        for now; production will override via fly secrets.
+    APP_VERSION:
+      type: string
+      default: "dev"
+      required: false
+      note: >
+        Included in the /health response body. Set at deploy time (e.g. fly secrets).
+        Defaults to "dev" when not set.
+
+# --- Startup sequence ---
+
+startup_sequence:
+  1: Load .env file via godotenv (only in development; no-op if file missing)
+  2: Parse and validate config — log.Fatal if DATABASE_URL is empty
+  3: Open GORM connection to Postgres via DATABASE_URL
+  4: Ping DB with a 5-second context timeout — log.Fatal if unreachable
+  5: Build health checker registry — register DatabaseChecker
+  6: Wire handler dependencies (HealthHandler)
+  7: Register CORS middleware globally
+  8: Register routes (/health)
+  9: Start HTTP server on PORT — log.Fatal if bind fails
+  10: Block waiting for SIGTERM or SIGINT → begin graceful shutdown
+
+# --- Graceful shutdown ---
+
+graceful_shutdown:
+  signals: [SIGTERM, SIGINT]
+  drain_timeout: 30s
+  steps:
+    - Stop accepting new connections
+    - Wait up to 30s for in-flight requests to complete
+    - Close GORM DB connection
+    - Exit 0
+
+# --- Middleware ---
+
+middleware:
+  cors:
+    description: >
+      Hand-written with net/http stdlib. Applied globally before all routes.
+    behavior:
+      - Reads CORS_ALLOWED_ORIGINS from config
+      - Sets Access-Control-Allow-Origin on every response
+      - Handles OPTIONS preflight requests — returns 204 with appropriate headers
+      - Default value "*" allows all origins
+
+# --- GET /health ---
+
+request:
+  method: GET
+  path: /health
+  auth: none — public, no authentication required
+
+responses:
+  200:
+    description: All registered checkers are healthy
+    body:
+      status: "healthy"
+      version: "1.0.0"
+      timestamp: "2026-06-08T10:00:00Z"
+      uptime: "3h22m10s"
+      checks:
+        database:
+          status: "healthy"
+          latency_ms: 4
+
+  503:
+    description: One or more checkers are unhealthy
+    body:
+      status: "unhealthy"
+      version: "1.0.0"
+      timestamp: "2026-06-08T10:00:00Z"
+      uptime: "1h05m30s"
+      checks:
+        database:
+          status: "unhealthy"
+          error: "connection refused"
+
+# --- Business rules ---
+
+rules:
+  - Top-level status is "healthy" only if ALL registered checks pass
+  - HTTP status is 200 when healthy, 503 when unhealthy
+  - DatabaseChecker runs SELECT 1 with a 3-second context timeout
+  - New checkers only need to implement the Checker interface and register
+    themselves — the handler never changes (open/closed principle)
+  - App must fail fast at startup if DATABASE_URL is missing or DB is unreachable
+  - Migrations are never run automatically — operator must run make migrate-up
+  - CORS_ALLOWED_ORIGINS defaults to "*"; production overrides via fly secrets
+  - APP_VERSION defaults to "dev"; production overrides via fly secrets
+
+# --- Border / corner cases ---
+
+border_cases:
+  - DATABASE_URL missing → log.Fatal with message "DATABASE_URL is required but not set"
+  - DB reachable at startup but goes down later → next /health call returns 503
+  - SIGTERM received while a request is in flight → request completes, then exit 0
+  - PORT already bound → server fails to listen, log.Fatal with OS error message
+  - CORS_ALLOWED_ORIGINS not set → defaults to "*" silently (no error)
+  - /health called with a method other than GET → 405 Method Not Allowed
+
+# --- Definition of done ---
+
+definition_of_done:
+  - Server starts and logs the port it is listening on
+  - Server refuses to start with a clear log.Fatal if DATABASE_URL is missing
+  - Server refuses to start with a clear log.Fatal if DB ping fails at startup
+  - GET /health returns 200 + healthy body when DB is reachable
+  - GET /health returns 503 + unhealthy body when DB is down
+  - APP_VERSION value appears in /health response body
+  - DatabaseChecker runs SELECT 1 with a 3-second timeout (verified in test)
+  - CORS Access-Control-Allow-Origin header is present on all responses
+  - OPTIONS preflight returns 204
+  - Graceful shutdown: SIGTERM lets in-flight requests finish then exits 0
+  - TestHealth_AllChecksPass → 200 + healthy
+  - TestHealth_DatabaseUnhealthy → 503 + unhealthy + error populated
+  - TestHealth_NewCheckerUnhealthy → failing checker propagates to top-level status
+  - go vet ./... passes with zero warnings
