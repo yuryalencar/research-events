@@ -12,5 +12,16 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Isolated test database — separate instance so integration tests never touch dev data.
+  # connect with: postgres://postgres:postgres@localhost:5433/research_events_test
+  postgres_test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: research_events_test
+    ports:
+      - "5433:5432"
+
 volumes:
   postgres_data:

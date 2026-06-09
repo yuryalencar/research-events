@@ -1,0 +1,57 @@
+endpoint: POST /api/v1/auth/logout
+
+description: >
+  Logs out the authenticated user by clearing both token fields in the database
+  and expiring both cookies. Accepts an expired-but-structurally-valid access token
+  to allow graceful logout. Idempotent — calling it twice is safe.
+
+request:
+  cookies_required:
+    - access_token (JWT, HTTP-only)
+  body: none
+
+responses:
+  200:
+    code: LOGOUT_SUCCESS
+    body:
+      code: LOGOUT_SUCCESS
+      data: null
+    cookies_cleared:
+      - access_token (MaxAge=0, expires immediately)
+      - refresh_token (MaxAge=0, expires immediately)
+
+  401:
+    code: TOKEN_MISSING
+    body:
+      code: TOKEN_MISSING
+      error: { message: "authentication token is missing" }
+
+  401:
+    code: TOKEN_INVALID
+    body:
+      code: TOKEN_INVALID
+      error: { message: "authentication token is invalid" }
+
+rules:
+  - If no access_token cookie → 401 TOKEN_MISSING
+  - If cookie present but signature invalid/tampered → 401 TOKEN_INVALID
+  - If cookie present and signature valid (even if expired) → 200, clear DB + expire cookies
+  - Clear: access_token_jti, access_token_expires_at, refresh_token_hash, refresh_token_expires_at
+  - Idempotent: clearing already-null fields is fine — no error
+
+permissions:
+  - Requires access_token cookie (admin or moderator)
+
+border_cases:
+  - No access_token cookie → 401 TOKEN_MISSING
+  - Expired token (valid signature) → 200 LOGOUT_SUCCESS (graceful logout)
+  - Tampered/invalid signature → 401 TOKEN_INVALID
+  - Already logged out (tokens NULL in DB) → 200 LOGOUT_SUCCESS (idempotent)
+
+definition_of_done:
+  - Valid token → 200, both cookies cleared (MaxAge=0), DB tokens set to NULL
+  - Expired token (valid signature) → 200 LOGOUT_SUCCESS
+  - No cookie → 401 TOKEN_MISSING
+  - Tampered token → 401 TOKEN_INVALID
+  - Double logout → 200 both times (idempotent)
+  - All border cases have a corresponding test

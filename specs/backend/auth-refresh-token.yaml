@@ -1,0 +1,85 @@
+endpoint: POST /api/v1/auth/refresh-token
+
+description: >
+  Rotates both tokens. Reads the refresh token from its HTTP-only cookie, validates
+  it against the SHA-256 hash stored in the database, and issues new access + refresh
+  tokens. The previous refresh token is immediately invalidated upon use.
+
+request:
+  cookies_required:
+    - refresh_token (HTTP-only cookie set by /auth/login or a previous /auth/refresh-token)
+  body: none
+
+responses:
+  200:
+    code: REFRESH_SUCCESS
+    body:
+      code: REFRESH_SUCCESS
+      data:
+        token: string   # new JWT access token
+        role: string
+        user:
+          id: integer
+          name: string
+          email: string
+    cookies_set:
+      - name: access_token (new, HTTP-only, Secure, SameSite=Strict, Path=/, MaxAge=30min)
+      - name: refresh_token (new, HTTP-only, Secure, SameSite=Strict, Path=/api/v1/auth, MaxAge=4h)
+
+  401:
+    code: REFRESH_TOKEN_MISSING
+    body:
+      code: REFRESH_TOKEN_MISSING
+      error: { message: "refresh token cookie is missing" }
+
+  401:
+    code: REFRESH_TOKEN_INVALID
+    body:
+      code: REFRESH_TOKEN_INVALID
+      error: { message: "refresh token is invalid or expired" }
+
+  401:
+    code: REFRESH_TOKEN_REUSE
+    body:
+      code: REFRESH_TOKEN_REUSE
+      error: { message: "refresh token has already been used" }
+    note: >
+      Token reuse means the old token (already rotated) was presented again.
+      This indicates potential token theft — clear ALL tokens in DB immediately,
+      forcing a full re-login. Both cookies are expired in the response.
+
+  423:
+    code: ACCOUNT_LOCKED
+    body:
+      code: ACCOUNT_LOCKED
+      error: { message: "account is locked" }
+
+rules:
+  - Read refresh token from HTTP-only cookie only — never from request body or headers
+  - Validate: SHA-256(cookie value) matches users.refresh_token_hash AND refresh_token_expires_at is in the future
+  - On valid refresh: generate new access_token (new jti) + new refresh_token, update DB atomically
+  - Old refresh_token_hash overwritten — subsequent use of old token → hash mismatch → REFRESH_TOKEN_REUSE
+  - On REFRESH_TOKEN_REUSE detected: set access_token_jti = NULL, refresh_token_hash = NULL in DB
+  - Rate-limit: 10 attempts per IP per minute
+  - Locked accounts cannot refresh (return 423)
+
+permissions:
+  - Requires valid refresh_token cookie — no access_token needed
+
+border_cases:
+  - No refresh_token cookie → 401 REFRESH_TOKEN_MISSING
+  - Expired refresh token (past refresh_token_expires_at) → 401 REFRESH_TOKEN_INVALID
+  - Token hash does not match DB (already rotated) → 401 REFRESH_TOKEN_REUSE + DB tokens cleared
+  - Tampered cookie value → SHA-256 mismatch → 401 REFRESH_TOKEN_INVALID
+  - Locked account with valid refresh token → 423 ACCOUNT_LOCKED
+  - Concurrent refresh with same token (race condition) → one succeeds, the other hits REFRESH_TOKEN_REUSE
+
+definition_of_done:
+  - Returns 200 + new cookies on valid refresh token
+  - Old refresh_token_hash overwritten in DB immediately on success
+  - Presenting old token after rotation → 401 REFRESH_TOKEN_REUSE + DB tokens set to NULL
+  - Expired token → 401 REFRESH_TOKEN_INVALID
+  - Missing cookie → 401 REFRESH_TOKEN_MISSING
+  - Locked account → 423 ACCOUNT_LOCKED
+  - Rate limit enforced (10/IP/min)
+  - All border cases have a corresponding test

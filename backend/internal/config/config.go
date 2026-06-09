@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Port               string
 	DatabaseURL        string
+	JWTSecret          string
 	Env                string
 	CORSAllowedOrigins string
 	AppVersion         string
@@ -29,11 +30,17 @@ func Load() (Config, error) {
 		return Config{}, errors.New("DATABASE_URL is required but not set")
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return Config{}, errors.New("JWT_SECRET is required but not set")
+	}
+
 	return Config{
 		Port:               getEnv("PORT", "8080"),
 		DatabaseURL:        dbURL,
+		JWTSecret:          jwtSecret,
 		Env:                getEnv("ENV", "development"),
-		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
+		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 		AppVersion:         getEnv("APP_VERSION", "dev"),
 	}, nil
 }

@@ -1,0 +1,99 @@
+endpoint: POST /api/v1/auth/login
+
+description: >
+  Authenticates an admin or moderator. Sets HTTP-only cookies for both the
+  access token and refresh token, and returns the access token + user info
+  in the response body. Updates the user's token state in the database (stateful JWT).
+
+request:
+  body:
+    email: string (required)
+    password: string (required)
+
+responses:
+  200:
+    code: LOGIN_SUCCESS
+    body:
+      code: LOGIN_SUCCESS
+      data:
+        token: string   # JWT access token (also set as HTTP-only cookie)
+        role: string    # "admin" | "moderator"
+        user:
+          id: integer
+          name: string
+          email: string
+    cookies_set:
+      - name: access_token
+        flags: HTTP-only, Secure, SameSite=Strict, Path=/, MaxAge=30min
+      - name: refresh_token
+        flags: HTTP-only, Secure, SameSite=Strict, Path=/api/v1/auth, MaxAge=4h
+
+  400:
+    code: VALIDATION_ERROR
+    body:
+      code: VALIDATION_ERROR
+      error: { message: "email and password are required" }
+
+  401:
+    code: INVALID_CREDENTIALS
+    body:
+      code: INVALID_CREDENTIALS
+      error: { message: "invalid credentials" }
+    note: >
+      Used for both wrong password AND non-existent email.
+      Never reveal whether the email exists.
+
+  403:
+    code: FORBIDDEN
+    body:
+      code: FORBIDDEN
+      error: { message: "account does not have permission to authenticate" }
+    note: Returned when credentials are valid but role is contributor.
+
+  423:
+    code: ACCOUNT_LOCKED
+    body:
+      code: ACCOUNT_LOCKED
+      error: { message: "account is locked due to too many failed attempts" }
+
+rules:
+  - Passwords hashed with bcrypt cost 12 — never store plaintext
+  - Access token: JWT (HS256), contains jti (UUID v4), sub (user_id), role, name, email, exp, iat
+  - Refresh token: opaque 32-byte random hex string — SHA-256 hash stored in DB
+  - Access token JWT also returned in response body (data.token)
+  - Refresh token NEVER in response body — HTTP-only cookie only
+  - On success: store access_token_jti + refresh_token_hash + their expiry timestamps in users table
+  - On success: reset failed_login_attempts to 0
+  - Rate-limit: 10 attempts per IP per minute
+  - 5 failed attempts: set locked_at = NOW(); return 423 on all subsequent attempts (even correct password)
+  - failed_login_attempts increments only on wrong password (not on 403 contributor or 400 validation errors)
+
+permissions:
+  - Public endpoint — no authentication required
+  - admin and moderator roles succeed (200)
+  - contributor role → 403 FORBIDDEN (not 401)
+  - non-existent email or wrong password → 401 INVALID_CREDENTIALS
+
+border_cases:
+  - Empty email field → 400 VALIDATION_ERROR
+  - Empty password field → 400 VALIDATION_ERROR
+  - Valid email format but not in DB → 401 INVALID_CREDENTIALS
+  - Correct email, wrong password → 401 INVALID_CREDENTIALS (same shape, never reveal email exists)
+  - Correct credentials, role = contributor → 403 FORBIDDEN (no failed_login_attempts increment)
+  - 4th failed attempt → 401 (not yet locked, counter = 4)
+  - 5th failed attempt → account becomes locked (locked_at set), returns 401 for this attempt
+  - 6th attempt on locked account → 423 ACCOUNT_LOCKED (regardless of password correctness)
+  - Malformed JSON body → 400 VALIDATION_ERROR
+
+definition_of_done:
+  - Returns 200 + both cookies + body on valid admin/moderator credentials
+  - Returns 401 INVALID_CREDENTIALS for wrong password (no email existence hint)
+  - Returns 401 INVALID_CREDENTIALS for non-existent email (same shape)
+  - Returns 403 FORBIDDEN for contributor login attempt
+  - Returns 400 VALIDATION_ERROR for missing email or password
+  - Returns 423 ACCOUNT_LOCKED once account is locked
+  - 5 failed attempts sets locked_at; counter resets to 0 on success
+  - bcrypt cost verified as 12 in test
+  - access_token_jti and refresh_token_hash written to DB on success
+  - Rate limit enforced (10/IP/min)
+  - All border cases have a corresponding test

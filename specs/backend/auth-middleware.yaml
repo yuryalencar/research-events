@@ -1,0 +1,58 @@
+name: JWT Auth Middleware + Role Guard
+
+description: >
+  Two chainable middleware functions. RequireAuth validates the access token and
+  attaches AuthUser to the request context. RequireRole enforces role-based access.
+  Both are applied at route registration level in main.go — never inside handlers.
+
+middleware:
+  RequireAuth:
+    reads: access_token HTTP-only cookie
+    steps:
+      1. Missing cookie → 401 TOKEN_MISSING
+      2. Decode JWT → invalid signature or malformed → 401 TOKEN_INVALID
+      3. Check exp claim → expired → 401 TOKEN_EXPIRED (distinct from invalid — frontend uses this to trigger /refresh-token)
+      4. Look up user by sub (user_id) in DB → not found → 401 TOKEN_INVALID
+      5. Check DB access_token_jti matches JWT jti claim → mismatch → 401 TOKEN_INVALID
+      6. Check locked_at IS NULL → locked → 423 ACCOUNT_LOCKED
+      7. Attach AuthUser{ID, Name, Email, Role} to context → call next handler
+    responses:
+      401 TOKEN_MISSING:  "authentication token is missing"
+      401 TOKEN_EXPIRED:  "authentication token has expired"
+      401 TOKEN_INVALID:  "authentication token is invalid"
+      423 ACCOUNT_LOCKED: "account is locked"
+
+  RequireRole(roles ...string):
+    must_be_chained_after: RequireAuth
+    steps:
+      1. Read AuthUser from context (set by RequireAuth)
+      2. Check user.Role is in the permitted roles list
+      3. Match → call next handler
+      4. No match → 403 FORBIDDEN
+    responses:
+      403 FORBIDDEN: "insufficient permissions"
+
+context_value:
+  type: AuthUser
+  fields:
+    ID:    uint
+    Name:  string
+    Email: string
+    Role:  string   # "admin" | "moderator"
+
+rules:
+  - TOKEN_EXPIRED is a distinct code — frontend uses it to decide whether to call /auth/refresh-token
+  - Expiry checked before the DB lookup (avoids unnecessary query on expired tokens)
+  - JWT_SECRET loaded from config (env var), never hardcoded
+  - RequireRole must always be chained after RequireAuth — panics at startup if used standalone
+
+definition_of_done:
+  - Valid token → AuthUser in context, request proceeds
+  - Missing cookie → 401 TOKEN_MISSING
+  - Expired token → 401 TOKEN_EXPIRED (not TOKEN_INVALID)
+  - Invalid signature → 401 TOKEN_INVALID
+  - JTI mismatch (revoked or logged out) → 401 TOKEN_INVALID
+  - Locked account → 423 ACCOUNT_LOCKED
+  - RequireRole matching role → passes through
+  - RequireRole wrong role → 403 FORBIDDEN
+  - All cases have a corresponding test

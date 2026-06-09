@@ -1,0 +1,55 @@
+migration: 001_create_users
+
+description: >
+  Creates the users table. This is the first migration.
+  Supports three roles: admin, moderator, contributor.
+  Contributors have no password (passwordless — created automatically on first submission).
+  Includes stateful JWT columns and account lockout fields.
+  No seed data — admin users are inserted manually or via a future CLI command.
+
+table: users
+
+columns:
+  id:                       BIGSERIAL PRIMARY KEY
+  name:                     VARCHAR(255) NOT NULL
+  email:                    VARCHAR(255) NOT NULL
+  password_hash:            VARCHAR(255) NULL         # NULL for passwordless contributors
+  role:                     VARCHAR(50)  NOT NULL DEFAULT 'contributor'
+                            # CHECK (role IN ('admin', 'moderator', 'contributor'))
+
+  # Stateful JWT — one valid token pair per user at a time
+  access_token_jti:         VARCHAR(36)  NULL         # UUID v4 of the current valid access token
+  access_token_expires_at:  TIMESTAMPTZ  NULL
+  refresh_token_hash:       VARCHAR(64)  NULL         # SHA-256 hex of the current refresh token
+  refresh_token_expires_at: TIMESTAMPTZ  NULL
+
+  # Account lockout
+  failed_login_attempts:    INTEGER      NOT NULL DEFAULT 0
+  locked_at:                TIMESTAMPTZ  NULL         # NULL = not locked
+
+  # Timestamps (GORM-compatible)
+  created_at:               TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  updated_at:               TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  deleted_at:               TIMESTAMPTZ  NULL         # soft delete
+
+constraints:
+  - UNIQUE (email)
+  - CHECK (role IN ('admin', 'moderator', 'contributor'))
+
+indexes:
+  - users_email_idx UNIQUE (email)
+  - users_role_idx (role)                             # admin queries filtering by role
+  - users_access_token_jti_idx (access_token_jti)     # fast JTI lookup on every authenticated request
+
+goose:
+  file: 001_create_users.sql
+  up: CREATE TABLE + constraints + indexes
+  down: DROP TABLE users
+
+definition_of_done:
+  - Migration runs up without error against a clean Postgres 16 instance
+  - Migration runs down without error
+  - Unique constraint on email enforced (duplicate insert fails)
+  - Role check constraint enforced
+  - All three indexes present after migration
+  - Goose version table updated correctly

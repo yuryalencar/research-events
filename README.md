@@ -38,29 +38,47 @@ git clone https://github.com/yuryalencar/research-events.git
 cd research-events
 ```
 
-### 2. Start the database
+### 2. Install tools
+
+```bash
+make install-tools   # installs goose migration runner — run once per machine
+```
+
+### 3. Start the databases
 
 ```bash
 docker compose up -d
 ```
 
-This starts a PostgreSQL 16 instance on port `5432` with:
-- user: `postgres`
-- password: `postgres`
-- database: `research_events`
+This starts two PostgreSQL 16 instances:
+- `postgres` on port `5432` — dev database (`research_events`)
+- `postgres_test` on port `5433` — integration test database (`research_events_test`)
 
-### 3. Backend
+Both use `postgres`/`postgres` credentials.
+
+### 4. Run migrations
+
+```bash
+make migrate-up         # applies migrations to dev DB
+make migrate-test-up    # applies migrations to test DB (needed to run `go test ./...`)
+```
+
+### 5. Backend
 
 ```bash
 cd backend
-cp .env.example .env   # fill in your values
+cp .env.example .env   # set DATABASE_URL and JWT_SECRET at minimum
 go mod download
 go run ./cmd/api
 ```
 
+Required env vars:
+- `DATABASE_URL` — Postgres connection string
+- `JWT_SECRET` — secret for signing JWTs (any long random string)
+
 The API will be available at `http://localhost:8080`.
 
-### 4. Frontend
+### 6. Frontend
 
 ```bash
 cd frontend
@@ -98,9 +116,11 @@ go vet ./...          # static analysis
 ### Infrastructure
 
 ```bash
-docker compose up -d    # start local Postgres
-make migrate-up         # run pending migrations
-make migrate-down       # roll back last migration
+make install-tools      # install goose binary — run once per machine
+docker compose up -d    # start local Postgres (5432) and test Postgres (5433)
+make migrate-up         # run pending migrations on dev DB
+make migrate-test-up    # run pending migrations on test DB
+make migrate-down       # roll back last migration on dev DB
 make generate-mocks     # regenerate gomock files
 make generate-types     # regenerate frontend types from OpenAPI spec
 ```
@@ -144,12 +164,19 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Date | Session | Summary |
 |------|---------|---------|
 | 2026-06-08 | [Server Bootstrap + Health Check](ai-sessions/2026-06-08-server-bootstrap-health-check.md) | Go server wired: config, DB ping, CORS, `GET /health` extensible checker, graceful shutdown. 21 tests. |
+| 2026-06-09 | [Auth Feature](ai-sessions/2026-06-09-auth-feature.md) | Login, refresh-token, logout, account unlock. Stateful JWT (JTI), token rotation, rate limiting, lockout. Users + audit_logs migrations. 94 tests. |
 
 ## Specs
 
 | Feature | Spec | Status |
 |---------|------|--------|
 | Server Bootstrap + Health Check | [server-bootstrap.yaml](specs/backend/server-bootstrap.yaml) | Done |
+| Auth: Login | [auth-login.yaml](specs/backend/auth-login.yaml) | Done |
+| Auth: Refresh Token | [auth-refresh-token.yaml](specs/backend/auth-refresh-token.yaml) | Done |
+| Auth: Logout | [auth-logout.yaml](specs/backend/auth-logout.yaml) | Done |
+| Auth: JWT Middleware + Role Guard | [auth-middleware.yaml](specs/backend/auth-middleware.yaml) | Done |
+| Admin: Unlock User Account | [admin-users-unlock.yaml](specs/backend/admin-users-unlock.yaml) | Done |
+| Database: Users table | [database-users.yaml](specs/backend/database-users.yaml) | Done |
 
 ---
 

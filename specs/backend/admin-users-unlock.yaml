@@ -1,0 +1,101 @@
+endpoint: PATCH /api/v1/admin/users/:id/unlock
+
+description: >
+  Unlocks a user account that was locked due to too many failed login attempts.
+  Only admins can perform this. An admin cannot unlock their own account.
+  Clears locked_at and resets failed_login_attempts to 0.
+  Writes an AuditLog row (extends entity_type to include "user").
+
+path_params:
+  id: integer (user ID to unlock)
+
+request:
+  body: none
+
+responses:
+  200:
+    code: USER_UNLOCKED
+    body:
+      code: USER_UNLOCKED
+      data:
+        user:
+          id: integer
+          name: string
+          email: string
+          role: string
+
+  401:
+    note: Standard RequireAuth responses (TOKEN_MISSING / TOKEN_EXPIRED / TOKEN_INVALID)
+
+  400:
+    code: VALIDATION_ERROR
+    body:
+      code: VALIDATION_ERROR
+      error: { message: ":id must be a valid integer" }
+
+  403:
+    code: FORBIDDEN
+    body:
+      code: FORBIDDEN
+      error: { message: "insufficient permissions" }
+    note: Returned for moderators.
+
+  404:
+    code: USER_NOT_FOUND
+    body:
+      code: USER_NOT_FOUND
+      error: { message: "user not found" }
+    note: Returned for both non-existent and soft-deleted users.
+
+  409:
+    code: USER_NOT_LOCKED
+    body:
+      code: USER_NOT_LOCKED
+      error: { message: "user account is not locked" }
+    note: >
+      409 Conflict — the request is valid but the current state makes it a no-op.
+      Returns this instead of silently succeeding to make intent explicit.
+
+  422:
+    code: CANNOT_UNLOCK_SELF
+    body:
+      code: CANNOT_UNLOCK_SELF
+      error: { message: "admins cannot unlock their own account" }
+
+rules:
+  - Requires admin role (RequireAuth + RequireRole("admin"))
+  - Compare :id to authenticated user ID — if equal → 422 CANNOT_UNLOCK_SELF (checked first)
+  - Target user must exist and not be soft-deleted — 404 if not found or deleted_at IS NOT NULL
+  - Target user must be locked (locked_at IS NOT NULL) — 409 if already unlocked
+  - On success: locked_at = NULL, failed_login_attempts = 0
+  - Write AuditLog: entity_type="user", entity_id=:id, action="unlocked", changed_by_id=admin ID
+  - Note: extends AuditLog entity_type enum from ("event"|"deadline") to also include "user"
+
+permissions:
+  - admin role only
+  - moderator → 403 FORBIDDEN
+  - admin cannot unlock themselves → 422 CANNOT_UNLOCK_SELF
+
+border_cases:
+  - Admin unlocks another admin → 200 USER_UNLOCKED
+  - Admin unlocks a moderator → 200 USER_UNLOCKED
+  - Admin unlocks a contributor → 200 USER_UNLOCKED
+  - Admin attempts self-unlock → 422 CANNOT_UNLOCK_SELF
+  - Target user not found → 404 USER_NOT_FOUND
+  - Target user is soft-deleted (deleted_at IS NOT NULL) → 404 USER_NOT_FOUND
+  - Target user exists but is not locked → 409 USER_NOT_LOCKED
+  - Moderator attempts unlock → 403 FORBIDDEN
+  - :id is not a valid integer → 400 VALIDATION_ERROR
+
+definition_of_done:
+  - Returns 200 + user data when admin unlocks a valid locked account
+  - locked_at set to NULL in DB after unlock
+  - failed_login_attempts reset to 0 in DB after unlock
+  - AuditLog row written with action "unlocked"
+  - Returns 422 CANNOT_UNLOCK_SELF when admin targets their own ID
+  - Returns 409 USER_NOT_LOCKED when target is not locked
+  - Returns 404 USER_NOT_FOUND when :id does not exist
+  - Returns 404 USER_NOT_FOUND when target user is soft-deleted
+  - Returns 403 FORBIDDEN for moderator attempt
+  - Returns 400 VALIDATION_ERROR for non-integer :id
+  - All border cases have a corresponding test

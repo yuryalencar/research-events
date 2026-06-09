@@ -1,0 +1,9 @@
+# Compiled binaries — go build drops these in the module root
+/api
+/cmd/api/api
+
+# Air hot-reload temp directory
+/tmp/
+
+# Local env file — production secrets go in fly secrets
+.env

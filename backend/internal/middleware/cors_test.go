@@ -1,9 +1,11 @@
 package middleware_test
 
-// Spec: specs/backend/server-bootstrap.yaml
+// Spec: specs/backend/server-bootstrap.yaml + specs/backend/auth-middleware.yaml
 // Rule: "Sets Access-Control-Allow-Origin on every response"
 // Rule: "Handles OPTIONS preflight requests — returns 204 with appropriate headers"
-// Rule: "Default value * allows all origins"
+// Rule: "Sets Access-Control-Allow-Credentials: true for specific origins (required for HTTP-only cookies)"
+// Rule: "Never sets Allow-Credentials when origin is * (browser rejects that combination)"
+// Rule: "Default origin is http://localhost:3000 (not * — wildcard blocks cookies)"
 
 import (
 	"net/http"
@@ -81,4 +83,39 @@ func TestCORS_NonOptionsRequestCallsNextHandler(t *testing.T) {
 
 		assert.True(t, called, "next handler should be called for %s", method)
 	}
+}
+
+// Spec: specs/backend/auth-middleware.yaml
+// Rule: "Cookies require Allow-Credentials: true + specific origin — wildcard blocks them (browser rule)"
+
+func TestCORS_SetsAllowCredentialsForSpecificOrigin(t *testing.T) {
+	handler := middleware.CORS("https://research-events.vercel.app")(nextHandler(new(bool)))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestCORS_DoesNotSetAllowCredentialsForWildcard(t *testing.T) {
+	// Browser rejects Allow-Credentials: true + Allow-Origin: * — never combine them.
+	handler := middleware.CORS("*")(nextHandler(new(bool)))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestCORS_SetsVaryOriginHeader(t *testing.T) {
+	// Vary: Origin tells CDNs/proxies to cache responses per origin when Allow-Origin is dynamic.
+	handler := middleware.CORS("https://research-events.vercel.app")(nextHandler(new(bool)))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, "Origin", rec.Header().Get("Vary"))
 }

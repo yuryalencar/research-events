@@ -65,9 +65,9 @@ func main() {
 
 	// --- 5. Routes + middleware ---
 
-	// buildHandler is defined in server.go — extracted so tests can call it
+	// BuildHandler is defined in server.go — extracted so tests can call it
 	// without starting a real server or waiting for OS signals.
-	httpHandler := BuildHandler(cfg, registry)
+	httpHandler := BuildHandler(cfg, db, registry, logger)
 
 	// --- 6. HTTP server ---
 
