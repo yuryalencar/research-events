@@ -22,10 +22,12 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// --- Repositories ---
 	userRepo := repository.NewUserRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
+	eventRepo := repository.NewEventRepository(db)
 
 	// --- Handlers ---
 	authHandler := handler.NewAuthHandler(userRepo, cfg.JWTSecret, logger)
 	adminUserHandler := handler.NewAdminUserHandler(userRepo, auditRepo, logger)
+	eventHandler := handler.NewEventHandler(eventRepo, logger)
 
 	// --- Middleware ---
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, userRepo)
@@ -33,6 +35,10 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// 10 requests/minute per IP — applied to login and refresh-token.
 	// See specs/backend/auth-login.yaml and auth-refresh-token.yaml rule sections.
 	rateLimiter := middleware.NewRateLimiter(10.0/60.0, 10)
+
+	// 50 requests/minute per IP — applied to public event submission.
+	// See specs/backend/events-submit.yaml rule "rate-limit 50 requests per minute per IP".
+	submitRateLimiter := middleware.NewRateLimiter(50.0/60.0, 50)
 
 	// --- Routes ---
 	mux := http.NewServeMux()
@@ -50,6 +56,10 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// Logout accepts expired tokens (graceful) — no rate-limit needed (not a brute-force target).
 	mux.Handle("POST /api/v1/auth/logout",
 		http.HandlerFunc(authHandler.Logout))
+
+	// Public event submission — no auth, rate-limited per events-submit.yaml.
+	mux.Handle("POST /api/v1/events/submit",
+		submitRateLimiter.Limit(http.HandlerFunc(eventHandler.Submit)))
 
 	// Admin-only endpoints — RequireAuth then RequireRole("admin").
 	mux.Handle("PATCH /api/v1/admin/users/{id}/unlock",

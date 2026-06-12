@@ -1,0 +1,138 @@
+endpoint: POST /api/v1/events/submit
+
+description: >
+  Public endpoint for submitting a new research conference/event for admin or
+  moderator review. Looks up or creates a contributor User by email, creates
+  the Event with status=pending, optionally creates its initial Deadlines, and
+  writes AuditLog rows for everything created.
+
+request:
+  body:
+    name: string (required)
+    slug: string (required, unique among pending/approved events, pattern ^[A-Za-z0-9_-]+$) # e.g. "MODELS2026"
+    country: string (required)
+    city: string (required)
+    latitude: number (required, range -90..90)
+    longitude: number (required, range -180..180)
+    start_date: string, ISO date (required)
+    end_date: string, ISO date (required, must be >= start_date)
+    website_url: string (required, must be a valid http/https URL)
+    domain: string (required, enum: ["computer_science"])
+    submitter:
+      name: string (required)
+      email: string (required, valid email format)
+    deadlines: array (optional, default empty)
+      - type: string (required, enum: ["abstract", "paper", "notification", "camera_ready", "other"])
+        description: string (required) # free text, e.g. "Research track"
+        date: string, ISO date (required)
+        is_optional: boolean (optional, default false)
+
+responses:
+  201:
+    description: Event submitted successfully, pending review
+    body:
+      data:
+        id: number
+        name: string
+        slug: string
+        country: string
+        city: string
+        latitude: number
+        longitude: number
+        start_date: string
+        end_date: string
+        website_url: string
+        domain: string
+        status: "pending"
+        created_by:
+          id: number
+          name: string
+          email: string
+        deadlines: array of Deadline (empty if none submitted)
+        created_at: string, ISO timestamp
+  400:
+    description: Validation error — missing/invalid field, or malformed JSON
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: "<field-specific message>"
+  409:
+    description: Slug already used by a pending or approved event
+    body:
+      error:
+        code: EVENT_ALREADY_SUBMITTED
+        message: "an event with this slug has already been submitted"
+  429:
+    description: Rate limit exceeded for this IP
+    body:
+      error:
+        code: RATE_LIMIT_EXCEEDED
+        message: "too many submissions from this IP, please try again later"
+
+rules:
+  - All event fields are mandatory, including website_url — an event must be a complete, citable record
+  - domain is an extensible string enum; only "computer_science" is valid for now
+  - end_date must be >= start_date
+  - Past dates are allowed (the event simply won't show under default "current year" filters)
+  - latitude/longitude validated with standard geographic range checks only
+  - slug is chosen by the submitter (not generated) and must be unique among events
+    with status=pending or status=approved; a slug used only by a rejected event
+    can be reused by a new submission
+  - slug must match ^[A-Za-z0-9_-]+$ (letters, digits, hyphens, underscores only)
+  - submitter.email is validated with a simple regex (format only, no MX/dns checks)
+  - Contributor lookup by email, regardless of existing role (admin/moderator/contributor):
+    - If a User with that email exists, link event.created_by_id to that user and
+      update their name to the submitted submitter.name (always overwritten)
+    - If no User exists, create one with role=contributor, password_hash=NULL,
+      name and email from submitter
+  - Event is always created with status=pending — never auto-approved
+  - deadlines is optional — submitter may add them now or after approval via a
+    separate endpoint (out of scope for this spec)
+  - If deadlines are provided, type/description/date are required per entry;
+    is_optional defaults to false; all created with is_active=true
+  - AuditLog row written for the Event (entity_type=event, action=created,
+    changed_by_id=created_by_id)
+  - AuditLog row written for each Deadline created (entity_type=deadline,
+    action=deadline_added, changed_by_id=created_by_id)
+  - Rate limit: 50 requests per minute per IP (higher than auth endpoints since
+    this is a write-heavy public endpoint and one IP may submit multiple events)
+
+permissions:
+  - Public endpoint — no authentication required
+  - Behavior is identical regardless of the submitter's existing role (admin,
+    moderator, or contributor) — role is not checked or changed by this endpoint
+
+border_cases:
+  - Missing any required field (event or submitter) → 400 VALIDATION_ERROR
+  - Invalid submitter.email format → 400 VALIDATION_ERROR
+  - website_url not a valid http/https URL → 400 VALIDATION_ERROR
+  - domain not in the allowed enum → 400 VALIDATION_ERROR
+  - latitude/longitude out of range → 400 VALIDATION_ERROR
+  - end_date earlier than start_date → 400 VALIDATION_ERROR
+  - start_date/end_date in the past → allowed, 201
+  - slug contains characters outside [A-Za-z0-9_-] → 400 VALIDATION_ERROR
+  - slug already used by a pending or approved event → 409 EVENT_ALREADY_SUBMITTED
+  - slug previously used only by a rejected event → allowed, 201 (slug reusable)
+  - deadlines entry missing type, description, or date → 400 VALIDATION_ERROR
+  - deadlines entry with invalid type value → 400 VALIDATION_ERROR
+  - deadlines omitted or empty array → allowed, event created with no deadlines
+  - submitter.email matches an existing User (any role) → event linked to that
+    user, name updated to submitted name, no new User created
+  - submitter.email is new → new User created with role=contributor, password_hash=NULL
+  - Malformed JSON body → 400 VALIDATION_ERROR
+  - More than 50 requests/min from one IP → 429 RATE_LIMIT_EXCEEDED
+
+definition_of_done:
+  - Returns 201 + pending event (with empty deadlines array) on valid submission without deadlines
+  - Returns 201 + pending event with deadlines array populated when deadlines are submitted
+  - New User with role=contributor and password_hash=NULL is created when email is unseen
+  - Existing User (any role) is reused and its name updated when email already exists
+  - Returns 409 EVENT_ALREADY_SUBMITTED when slug matches a pending or approved event
+  - Resubmission with a slug from a previously rejected event succeeds (201)
+  - Returns 400 VALIDATION_ERROR for each missing/invalid field listed in border_cases
+  - Returns 400 VALIDATION_ERROR for malformed JSON
+  - Returns 429 RATE_LIMIT_EXCEEDED after 50 requests/min from the same IP
+  - AuditLog row written for event creation (action=created)
+  - AuditLog row written for each submitted deadline (action=deadline_added)
+  - Event past dates (start_date/end_date in the past) are accepted (201)
+  - All border cases above have a corresponding test case

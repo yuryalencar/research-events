@@ -165,6 +165,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 |------|---------|---------|
 | 2026-06-08 | [Server Bootstrap + Health Check](ai-sessions/2026-06-08-server-bootstrap-health-check.md) | Go server wired: config, DB ping, CORS, `GET /health` extensible checker, graceful shutdown. 21 tests. |
 | 2026-06-09 | [Auth Feature](ai-sessions/2026-06-09-auth-feature.md) | Login, refresh-token, logout, account unlock. Stateful JWT (JTI), token rotation, rate limiting, lockout. Users + audit_logs migrations. 94 tests. |
+| 2026-06-12 | [Event Submission Feature](ai-sessions/2026-06-12-event-submission-feature.md) | `POST /api/v1/events/submit` — public submission with contributor lookup/creation, optional deadlines, slug reuse via partial unique index, FP service layer. Events + deadlines migrations. 148 tests. |
 
 ## Specs
 
@@ -177,6 +178,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Auth: JWT Middleware + Role Guard | [auth-middleware.yaml](specs/backend/auth-middleware.yaml) | Done |
 | Admin: Unlock User Account | [admin-users-unlock.yaml](specs/backend/admin-users-unlock.yaml) | Done |
 | Database: Users table | [database-users.yaml](specs/backend/database-users.yaml) | Done |
+| Events: Submit | [events-submit.yaml](specs/backend/events-submit.yaml) | Done |
 
 ---
 
