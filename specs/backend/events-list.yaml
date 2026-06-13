@@ -1,0 +1,164 @@
+endpoint: GET /api/v1/events
+
+description: >
+  Public endpoint that lists research events for the globe and list views.
+  Supports filtering by year, domain, country, status, and a map viewport
+  bounding box, plus pagination. Returns full event detail (including active
+  deadlines and contributor attribution) so the frontend can render globe
+  pins and event cards without a second request.
+
+request:
+  query_params:
+    year: integer (optional, default = current year)
+      # Default applies whenever ?year is omitted, independent of other filters
+      # (e.g. ?status=pending alone still defaults to the current year).
+    domain: string (optional, enum: ["computer_science"])
+    country: string (optional)
+      # Case-insensitive exact match (e.g. "brazil" matches "Brazil").
+    status: string (optional, enum: ["pending", "approved", "rejected"], default "approved")
+    tier: string (optional, enum: ["A*", "A", "B", "C", "unranked"])
+      # Matches events.tier exactly. tier is never NULL — defaults to "unranked"
+      # when not provided at submission.
+    first_deadline_month: integer (optional, range 1-12)
+      # Filters events whose earliest is_active=true deadline of type
+      # "abstract" or "paper" falls in the given calendar month AND year.
+      # The year used is ?year if provided, else the default (current year) —
+      # the same effective year used for the year filter itself.
+      # Events with no abstract/paper deadline in that year never match.
+    bbox: string (optional, format "minLng,minLat,maxLng,maxLat")
+      # All four values required if bbox is present.
+      # minLng/maxLng in [-180, 180], minLat/maxLat in [-90, 90].
+      # minLng must be < maxLng, minLat must be < maxLat.
+    page: integer (optional, default 1, min 1)
+    page_size: integer (optional, default 20, min 1, max 100)
+    pagination: string (optional, enum: ["on", "off"], default "on")
+      # "off" returns all matching rows regardless of page/page_size;
+      # page and page_size are ignored when pagination=off.
+
+responses:
+  200:
+    description: Events matching the given filters
+    body:
+      data:
+        - id: number
+          name: string
+          slug: string
+          country: string
+          city: string
+          latitude: number
+          longitude: number
+          start_date: string
+          end_date: string
+          website_url: string
+          domain: string
+          status: "pending" | "approved" | "rejected"
+          tier: "A*" | "A" | "B" | "C" | "unranked"
+          year: number
+          created_by:
+            id: number
+            name: string
+            email: string
+          last_updated_by:
+            id: number
+            name: string
+            email: string
+          deadlines:        # only is_active=true deadlines (per global UI rule)
+            - id: number
+              type: string
+              description: string
+              date: string
+              is_optional: boolean
+              is_active: true
+          created_at: string
+          updated_at: string
+      meta:
+        page: number    # always 1 when pagination=off
+        total: number   # total count of matching rows (independent of pagination)
+  400:
+    description: Invalid query parameters
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: "..."
+    note: >
+      Returned for any malformed/unknown filter value — see border_cases for
+      the full list of triggers.
+
+rules:
+  - All events are visible (any status) — filtering controls what's shown, not authorization.
+  - Default filters when not provided: status=approved, year=current year.
+  - All filters combine with AND (year AND domain AND country AND status AND tier AND
+    first_deadline_month AND bbox).
+  - Results sorted by start_date ascending (soonest upcoming first).
+  - bbox filters on latitude/longitude columns (indexed per architecture rules).
+  - Each event's deadlines array includes only is_active=true rows; full history
+    remains available via GET /api/v1/events/:id/deadlines.
+  - pagination=off returns every matching row in one response; meta.page=1 and
+    meta.total=len(data) in that case.
+  - Rate limit: 120 requests/minute per IP, burst 30 (token bucket — see
+    internal/middleware/rate_limit.go). Highest limit in the app since this is
+    the primary endpoint (globe + list views).
+
+permissions:
+  - Public endpoint — no authentication required.
+
+schema_changes:
+  # Required before this endpoint can be implemented — tracked as part of this
+  # feature's plan (Phase 2), not a separate feature.
+  - New migration: add `tier` VARCHAR column to `events`, NOT NULL DEFAULT 'unranked'
+    (CHECK constraint: tier IN ('A*','A','B','C','unranked')).
+  - model.Event gains a `Tier string` field (gorm:"column:tier;not null;default:unranked").
+  - specs/backend/events-submit.yaml is amended: `tier` becomes an optional
+    request field (enum: ["A*","A","B","C","unranked"]); omitted → "unranked".
+
+border_cases:
+  - No filters at all → status=approved, year=current year, page=1, page_size=20.
+  - ?status=pending with no ?year → year still defaults to current year.
+  - No events match filters → 200 with data: [] and meta.total: 0 (not an error).
+  - ?year=abc (non-numeric) → 400 VALIDATION_ERROR.
+  - ?status=foo (not in enum) → 400 VALIDATION_ERROR.
+  - ?domain=foo (not in enum) → 400 VALIDATION_ERROR.
+  - ?bbox=1,2,3 (wrong number of values) → 400 VALIDATION_ERROR.
+  - ?bbox with minLng >= maxLng or minLat >= maxLat → 400 VALIDATION_ERROR.
+  - ?bbox with a value out of range (e.g. lat=95) → 400 VALIDATION_ERROR.
+  - ?page=0 or negative → 400 VALIDATION_ERROR.
+  - ?page_size=0, negative, or > 100 → 400 VALIDATION_ERROR.
+  - ?pagination=maybe (not "on"/"off") → 400 VALIDATION_ERROR.
+  - ?pagination=off with ?page/?page_size also set → pagination=off wins; page/page_size ignored.
+  - ?tier=foo (not in enum) → 400 VALIDATION_ERROR.
+  - ?tier=unranked → matches events where tier='unranked' (the default for
+    events submitted without a tier).
+  - ?first_deadline_month=0 or 13 (out of 1-12 range) → 400 VALIDATION_ERROR.
+  - ?first_deadline_month=6 with an event that has only a "notification" deadline
+    in June (no abstract/paper deadline) → event NOT included.
+  - ?year=2026&first_deadline_month=6 with an event whose earliest abstract/paper
+    deadline is June 2025 (not 2026) → event NOT included (year mismatch).
+  - ?country=Brazil with an event whose country is "Brazilian Republic" → NOT
+    included (exact match only, not substring).
+  - 31st request in the same minute from one IP (burst 30 exhausted) → 429
+    RATE_LIMIT_EXCEEDED.
+  - Combination of bbox + year + domain + country + status + tier + first_deadline_month
+    all together → all applied with AND.
+
+definition_of_done:
+  - No filters → returns approved events for the current year, sorted by start_date ascending.
+  - ?status=pending alone → pending events for the current year.
+  - ?year=2025 alone → approved events for 2025.
+  - ?domain=computer_science, ?country=brazil (any case) filter correctly and combine with other filters via AND.
+  - ?bbox=minLng,minLat,maxLng,maxLat returns only events within the viewport.
+  - Pagination: ?page=2&page_size=10 returns the correct slice; meta.total reflects the full filtered count.
+  - ?pagination=off returns all matching rows in one response with meta.page=1.
+  - Each returned event includes only is_active=true deadlines.
+  - Each returned event includes created_by and last_updated_by.
+  - Each returned event includes its tier (never null — "unranked" by default).
+  - ?tier=A returns only events with tier='A'; ?tier=unranked returns events
+    submitted without a tier.
+  - ?first_deadline_month=<m> returns only events whose earliest active
+    abstract/paper deadline falls in month m.
+  - Empty result set → 200 with data: [] and meta.total: 0.
+  - All border cases above return 400 VALIDATION_ERROR with a descriptive message.
+  - 429 RATE_LIMIT_EXCEEDED returned once a single IP exceeds 120 req/min (burst 30).
+  - Migration adds `tier` column to `events` (NOT NULL DEFAULT 'unranked') with
+    the correct CHECK constraint (verified in test).
+  - events-submit.yaml's request body accepts optional `tier`; omitted defaults
+    to "unranked".

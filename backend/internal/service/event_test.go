@@ -234,6 +234,38 @@ func TestValidateSubmitEventInput_ValidDeadlines_ReturnsNil(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateSubmitEventInput_ValidTierValues_ReturnsNil(t *testing.T) {
+	// Spec: events-list.yaml schema_changes "tier becomes an optional request field
+	// (enum: ["A*","A","B","C","unranked"])"
+	for _, tier := range []string{"A*", "A", "B", "C", "unranked"} {
+		input := validSubmitInput()
+		input.Tier = tier
+
+		err := service.ValidateSubmitEventInput(input)
+
+		require.NoError(t, err, "tier %q should be valid", tier)
+	}
+}
+
+func TestValidateSubmitEventInput_EmptyTier_ReturnsNil(t *testing.T) {
+	// Spec: events-list.yaml schema_changes "omitted → 'unranked'"
+	input := validSubmitInput()
+	input.Tier = ""
+
+	err := service.ValidateSubmitEventInput(input)
+
+	require.NoError(t, err)
+}
+
+func TestValidateSubmitEventInput_InvalidTier_ReturnsError(t *testing.T) {
+	input := validSubmitInput()
+	input.Tier = "S"
+
+	err := service.ValidateSubmitEventInput(input)
+
+	require.Error(t, err)
+}
+
 func TestValidateSubmitEventInput_SameInputTwice_ReturnsIdenticalResult(t *testing.T) {
 	// FP: pure function — same input always produces the same output, no hidden state.
 	input := validSubmitInput()
@@ -260,6 +292,25 @@ func TestBuildEventFromInput_DerivesYearFromStartDate(t *testing.T) {
 	event := service.BuildEventFromInput(input)
 
 	assert.Equal(t, 2027, event.Year)
+}
+
+func TestBuildEventFromInput_EmptyTier_NormalizesToUnranked(t *testing.T) {
+	// Spec: events-list.yaml schema_changes "omitted → 'unranked'"
+	input := validSubmitInput()
+	input.Tier = ""
+
+	event := service.BuildEventFromInput(input)
+
+	assert.Equal(t, "unranked", event.Tier)
+}
+
+func TestBuildEventFromInput_PreservesProvidedTier(t *testing.T) {
+	input := validSubmitInput()
+	input.Tier = "A*"
+
+	event := service.BuildEventFromInput(input)
+
+	assert.Equal(t, "A*", event.Tier)
 }
 
 func TestBuildEventFromInput_CopiesAllScalarFields(t *testing.T) {

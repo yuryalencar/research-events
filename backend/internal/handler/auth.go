@@ -314,6 +314,14 @@ func writeSuccess(w http.ResponseWriter, status int, code string, data any) {
 	json.NewEncoder(w).Encode(map[string]any{"code": code, "data": data})
 }
 
+// writeSuccessWithMeta is writeSuccess with an additional top-level "meta" field —
+// used by list endpoints to convey pagination info alongside "data".
+func writeSuccessWithMeta(w http.ResponseWriter, status int, code string, data any, meta any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]any{"code": code, "data": data, "meta": meta})
+}
+
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

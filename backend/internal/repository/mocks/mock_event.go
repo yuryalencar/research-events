@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	model "github.com/yuryalencar/research-events/internal/model"
+	repository "github.com/yuryalencar/research-events/internal/repository"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -54,6 +55,22 @@ func (m *MockEventRepository) FindActiveBySlug(ctx context.Context, slug string)
 func (mr *MockEventRepositoryMockRecorder) FindActiveBySlug(ctx, slug any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindActiveBySlug", reflect.TypeOf((*MockEventRepository)(nil).FindActiveBySlug), ctx, slug)
+}
+
+// ListEvents mocks base method.
+func (m *MockEventRepository) ListEvents(ctx context.Context, filter repository.ListEventsFilter) ([]model.Event, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListEvents", ctx, filter)
+	ret0, _ := ret[0].([]model.Event)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListEvents indicates an expected call of ListEvents.
+func (mr *MockEventRepositoryMockRecorder) ListEvents(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEvents", reflect.TypeOf((*MockEventRepository)(nil).ListEvents), ctx, filter)
 }
 
 // Submit mocks base method.

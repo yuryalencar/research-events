@@ -24,6 +24,7 @@ type SubmitEventInput struct {
 	EndDate    time.Time
 	WebsiteURL string
 	Domain     string
+	Tier       string // optional; "" normalizes to "unranked" (see normalizeTier)
 	Submitter  SubmitterInput
 	Deadlines  []DeadlineInput
 }
@@ -51,6 +52,16 @@ type DeadlineInput struct {
 // never as a DB CHECK constraint.
 var allowedDomains = map[string]bool{
 	"computer_science": true,
+}
+
+// allowedTiers mirrors the events_tier_check CHECK constraint in
+// migrations/006_add_tier_to_events.sql — this is a closed enum.
+var allowedTiers = map[string]bool{
+	"A*":       true,
+	"A":        true,
+	"B":        true,
+	"C":        true,
+	"unranked": true,
 }
 
 // allowedDeadlineTypes mirrors the deadlines_type_check CHECK constraint in
@@ -110,6 +121,9 @@ func ValidateSubmitEventInput(input SubmitEventInput) error {
 	if !allowedDomains[input.Domain] {
 		return fmt.Errorf("domain %q is not a recognized domain", input.Domain)
 	}
+	if !allowedTiers[normalizeTier(input.Tier)] {
+		return fmt.Errorf("tier %q is not a recognized tier", input.Tier)
+	}
 	if input.Submitter.Name == "" {
 		return fmt.Errorf("submitter.name is required")
 	}
@@ -141,6 +155,7 @@ func BuildEventFromInput(input SubmitEventInput) model.Event {
 		EndDate:    input.EndDate,
 		WebsiteURL: input.WebsiteURL,
 		Domain:     input.Domain,
+		Tier:       normalizeTier(input.Tier),
 		Status:     model.EventStatusPending,
 		Year:       input.StartDate.Year(),
 	}
@@ -192,6 +207,18 @@ func BuildSubmission(input SubmitEventInput) (model.Event, []model.Deadline, mod
 }
 
 // --- Private functions ---
+
+// FP: pure function
+// normalizeTier depends only on its argument and always returns the same result
+// for the same input. An empty tier (the zero value, meaning "not provided in
+// the request") normalizes to "unranked" so validation and persistence never
+// have to treat "" as a separate case from the explicit "unranked" value.
+func normalizeTier(tier string) string {
+	if tier == "" {
+		return "unranked"
+	}
+	return tier
+}
 
 // FP: pure function
 // isValidWebsiteURL depends only on its argument — no I/O, no network request to

@@ -41,6 +41,10 @@ type Event struct {
 	Status     EventStatus `gorm:"not null;default:pending;index"`
 	Year       int         `gorm:"not null;index"`
 
+	// Tier is the CORE-style conference ranking (A*, A, B, C) — "unranked" when
+	// the submitter doesn't know or omits it. Never NULL: defaults at the DB level.
+	Tier string `gorm:"not null;default:unranked;index"`
+
 	CreatedByID     uint
 	CreatedBy       User `gorm:"foreignKey:CreatedByID"`
 	LastUpdatedByID uint

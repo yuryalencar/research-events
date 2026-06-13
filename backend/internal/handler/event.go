@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -34,6 +35,7 @@ type submitEventRequest struct {
 	EndDate    string            `json:"end_date"`
 	WebsiteURL string            `json:"website_url"`
 	Domain     string            `json:"domain"`
+	Tier       string            `json:"tier"`
 	Submitter  submitterRequest  `json:"submitter"`
 	Deadlines  []deadlineRequest `json:"deadlines"`
 }
@@ -110,7 +112,78 @@ func (h *EventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	writeSuccess(w, http.StatusCreated, "EVENT_SUBMITTED", toEventResponse(created))
 }
 
+// List handles GET /api/v1/events.
+// Public endpoint — no authentication required.
+func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
+	raw := toRawListEventsQuery(r.URL.Query())
+
+	input, err := service.ValidateListEventsQuery(raw, time.Now().Year())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	events, total, err := h.eventRepo.ListEvents(r.Context(), toListEventsFilter(input))
+	if err != nil {
+		h.logger.Error("failed to list events", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	data := make([]eventListItemResponse, 0, len(events))
+	for _, e := range events {
+		data = append(data, toEventListItemResponse(e))
+	}
+
+	writeSuccessWithMeta(w, http.StatusOK, "EVENTS_LISTED", data, listMeta{Page: input.Page, Total: total})
+}
+
 // --- Private functions ---
+
+// toRawListEventsQuery copies the relevant query string parameters into
+// service.RawListEventsQuery. No parsing or validation happens here — that is
+// ValidateListEventsQuery's job, so it stays testable without net/http.
+func toRawListEventsQuery(q url.Values) service.RawListEventsQuery {
+	return service.RawListEventsQuery{
+		Year:               q.Get("year"),
+		Domain:             q.Get("domain"),
+		Country:            q.Get("country"),
+		Status:             q.Get("status"),
+		Tier:               q.Get("tier"),
+		FirstDeadlineMonth: q.Get("first_deadline_month"),
+		BBox:               q.Get("bbox"),
+		Page:               q.Get("page"),
+		PageSize:           q.Get("page_size"),
+		Pagination:         q.Get("pagination"),
+	}
+}
+
+// toListEventsFilter maps the validated service.ListEventsInput to
+// repository.ListEventsFilter.
+func toListEventsFilter(input service.ListEventsInput) repository.ListEventsFilter {
+	var bbox *repository.BBoxFilter
+	if input.BBox != nil {
+		bbox = &repository.BBoxFilter{
+			MinLng: input.BBox.MinLng,
+			MinLat: input.BBox.MinLat,
+			MaxLng: input.BBox.MaxLng,
+			MaxLat: input.BBox.MaxLat,
+		}
+	}
+
+	return repository.ListEventsFilter{
+		Year:               input.Year,
+		Status:             input.Status,
+		Domain:             input.Domain,
+		Country:            input.Country,
+		Tier:               input.Tier,
+		FirstDeadlineMonth: input.FirstDeadlineMonth,
+		BBox:               bbox,
+		Page:               input.Page,
+		PageSize:           input.PageSize,
+		PaginationOff:      input.PaginationOff,
+	}
+}
 
 // toSubmitEventInput maps the JSON request into service.SubmitEventInput,
 // parsing date strings. Returns an error if any date is malformed.
@@ -149,6 +222,7 @@ func toSubmitEventInput(req submitEventRequest) (service.SubmitEventInput, error
 		EndDate:    endDate,
 		WebsiteURL: req.WebsiteURL,
 		Domain:     req.Domain,
+		Tier:       req.Tier,
 		Submitter: service.SubmitterInput{
 			Name:  req.Submitter.Name,
 			Email: req.Submitter.Email,
@@ -188,6 +262,7 @@ type eventResponse struct {
 	EndDate    string             `json:"end_date"`
 	WebsiteURL string             `json:"website_url"`
 	Domain     string             `json:"domain"`
+	Tier       string             `json:"tier"`
 	Status     string             `json:"status"`
 	CreatedBy  userResponse       `json:"created_by"`
 	Deadlines  []deadlineResponse `json:"deadlines"`
@@ -196,18 +271,6 @@ type eventResponse struct {
 
 // toEventResponse maps a persisted model.Event to its JSON response shape.
 func toEventResponse(e model.Event) eventResponse {
-	deadlines := make([]deadlineResponse, 0, len(e.Deadlines))
-	for _, d := range e.Deadlines {
-		deadlines = append(deadlines, deadlineResponse{
-			ID:          d.ID,
-			Type:        string(d.Type),
-			Description: d.Description,
-			Date:        d.Date.Format(dateLayout),
-			IsOptional:  d.IsOptional,
-			IsActive:    d.IsActive,
-		})
-	}
-
 	return eventResponse{
 		ID:         e.ID,
 		Name:       e.Name,
@@ -220,13 +283,96 @@ func toEventResponse(e model.Event) eventResponse {
 		EndDate:    e.EndDate.Format(dateLayout),
 		WebsiteURL: e.WebsiteURL,
 		Domain:     e.Domain,
+		Tier:       e.Tier,
 		Status:     string(e.Status),
 		CreatedBy: userResponse{
 			ID:    e.CreatedBy.ID,
 			Name:  e.CreatedBy.Name,
 			Email: e.CreatedBy.Email,
 		},
-		Deadlines: deadlines,
+		Deadlines: toDeadlineResponses(e.Deadlines),
 		CreatedAt: e.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+// toDeadlineResponses maps a slice of model.Deadline to their JSON response
+// shape — shared by toEventResponse and toEventListItemResponse.
+func toDeadlineResponses(deadlines []model.Deadline) []deadlineResponse {
+	out := make([]deadlineResponse, 0, len(deadlines))
+	for _, d := range deadlines {
+		out = append(out, deadlineResponse{
+			ID:          d.ID,
+			Type:        string(d.Type),
+			Description: d.Description,
+			Date:        d.Date.Format(dateLayout),
+			IsOptional:  d.IsOptional,
+			IsActive:    d.IsActive,
+		})
+	}
+	return out
+}
+
+// listMeta is the "meta" payload for GET /api/v1/events, per
+// specs/backend/events-list.yaml responses.200.body.meta.
+type listMeta struct {
+	Page  int   `json:"page"`
+	Total int64 `json:"total"`
+}
+
+// eventListItemResponse is one entry of the "data" array for
+// GET /api/v1/events, per specs/backend/events-list.yaml responses.200.body.data.
+type eventListItemResponse struct {
+	ID            uint               `json:"id"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Country       string             `json:"country"`
+	City          string             `json:"city"`
+	Latitude      float64            `json:"latitude"`
+	Longitude     float64            `json:"longitude"`
+	StartDate     string             `json:"start_date"`
+	EndDate       string             `json:"end_date"`
+	WebsiteURL    string             `json:"website_url"`
+	Domain        string             `json:"domain"`
+	Status        string             `json:"status"`
+	Tier          string             `json:"tier"`
+	Year          int                `json:"year"`
+	CreatedBy     userResponse       `json:"created_by"`
+	LastUpdatedBy userResponse       `json:"last_updated_by"`
+	Deadlines     []deadlineResponse `json:"deadlines"`
+	CreatedAt     string             `json:"created_at"`
+	UpdatedAt     string             `json:"updated_at"`
+}
+
+// toEventListItemResponse maps a persisted model.Event to its JSON response
+// shape for GET /api/v1/events.
+func toEventListItemResponse(e model.Event) eventListItemResponse {
+	return eventListItemResponse{
+		ID:         e.ID,
+		Name:       e.Name,
+		Slug:       e.Slug,
+		Country:    e.Country,
+		City:       e.City,
+		Latitude:   e.Latitude,
+		Longitude:  e.Longitude,
+		StartDate:  e.StartDate.Format(dateLayout),
+		EndDate:    e.EndDate.Format(dateLayout),
+		WebsiteURL: e.WebsiteURL,
+		Domain:     e.Domain,
+		Status:     string(e.Status),
+		Tier:       e.Tier,
+		Year:       e.Year,
+		CreatedBy: userResponse{
+			ID:    e.CreatedBy.ID,
+			Name:  e.CreatedBy.Name,
+			Email: e.CreatedBy.Email,
+		},
+		LastUpdatedBy: userResponse{
+			ID:    e.LastUpdatedBy.ID,
+			Name:  e.LastUpdatedBy.Name,
+			Email: e.LastUpdatedBy.Email,
+		},
+		Deadlines: toDeadlineResponses(e.Deadlines),
+		CreatedAt: e.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: e.UpdatedAt.Format(time.RFC3339),
 	}
 }

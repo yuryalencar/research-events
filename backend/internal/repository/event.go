@@ -30,6 +30,39 @@ type EventRepository interface {
 	// service.BuildSubmitterFromInput). The resulting user becomes
 	// event.CreatedByID / LastUpdatedByID and each deadline's CreatedByID.
 	Submit(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User) (model.Event, error)
+
+	// ListEvents returns events matching filter, sorted by start_date ascending,
+	// along with the total count of matching rows (independent of pagination).
+	// Each event's CreatedBy and LastUpdatedBy are preloaded, and Deadlines
+	// includes only is_active=true rows.
+	ListEvents(ctx context.Context, filter ListEventsFilter) ([]model.Event, int64, error)
+}
+
+// ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring
+// the validated fields of service.ListEventsInput.
+type ListEventsFilter struct {
+	Year    int
+	Status  model.EventStatus
+	Domain  *string
+	Country *string
+	Tier    *string
+	BBox    *BBoxFilter
+
+	// FirstDeadlineMonth, when set, restricts results to events whose earliest
+	// is_active=true deadline of type "abstract" or "paper" falls in this
+	// calendar month of Year.
+	FirstDeadlineMonth *int
+
+	// Page and PageSize are 1-indexed; ignored when PaginationOff is true.
+	Page          int
+	PageSize      int
+	PaginationOff bool
+}
+
+// BBoxFilter is the parsed map-viewport bounding box. Bounds are inclusive on
+// all four edges.
+type BBoxFilter struct {
+	MinLng, MinLat, MaxLng, MaxLat float64
 }
 
 // --- Types ---
@@ -92,7 +125,69 @@ func (r *eventRepository) Submit(ctx context.Context, event model.Event, deadlin
 	return event, nil
 }
 
+func (r *eventRepository) ListEvents(ctx context.Context, filter ListEventsFilter) ([]model.Event, int64, error) {
+	var total int64
+	if err := applyListEventsFilters(r.db.WithContext(ctx).Model(&model.Event{}), filter).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	query := applyListEventsFilters(r.db.WithContext(ctx), filter).
+		Preload("CreatedBy").
+		Preload("LastUpdatedBy").
+		Preload("Deadlines", "is_active = ?", true).
+		Order("start_date ASC")
+
+	if !filter.PaginationOff {
+		query = query.Limit(filter.PageSize).Offset((filter.Page - 1) * filter.PageSize)
+	}
+
+	var events []model.Event
+	if err := query.Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return events, total, nil
+}
+
 // --- Private functions ---
+
+// applyListEventsFilters applies the WHERE clauses shared by ListEvents' count
+// and select queries. db must not yet have Preload/Order/Find called on it —
+// returning a fresh *gorm.DB from each call site keeps the count query and the
+// select query independent (avoiding state leaking between them).
+func applyListEventsFilters(db *gorm.DB, filter ListEventsFilter) *gorm.DB {
+	db = db.Where("year = ? AND status = ?", filter.Year, filter.Status)
+	if filter.Domain != nil {
+		db = db.Where("domain = ?", *filter.Domain)
+	}
+	if filter.Country != nil {
+		db = db.Where("LOWER(country) = LOWER(?)", *filter.Country)
+	}
+	if filter.Tier != nil {
+		db = db.Where("tier = ?", *filter.Tier)
+	}
+	if filter.BBox != nil {
+		db = db.Where("longitude BETWEEN ? AND ? AND latitude BETWEEN ? AND ?",
+			filter.BBox.MinLng, filter.BBox.MaxLng, filter.BBox.MinLat, filter.BBox.MaxLat)
+	}
+	if filter.FirstDeadlineMonth != nil {
+		db = db.Where(`EXISTS (
+			SELECT 1 FROM deadlines d
+			WHERE d.event_id = events.id
+				AND d.is_active = true
+				AND d.type IN ('abstract', 'paper')
+				AND d.date = (
+					SELECT MIN(d2.date) FROM deadlines d2
+					WHERE d2.event_id = events.id
+						AND d2.is_active = true
+						AND d2.type IN ('abstract', 'paper')
+				)
+				AND EXTRACT(MONTH FROM d.date) = ?
+				AND EXTRACT(YEAR FROM d.date) = ?
+		)`, *filter.FirstDeadlineMonth, filter.Year)
+	}
+	return db
+}
 
 // findOrCreateSubmitter looks up a User by email within tx. If found, its name is
 // updated to submitter.Name and the existing record (with its original role) is

@@ -130,6 +130,35 @@ func TestBuildHandler_AuthLogoutRouteRegistered(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, rec.Code, "POST /api/v1/auth/logout must be registered")
 }
 
+func TestBuildHandler_EventsListRouteRegistered(t *testing.T) {
+	// ?year=abc fails validation before any repository call, so db=nil is safe —
+	// 400 (not 404) proves the route is wired.
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?year=abc", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "GET /api/v1/events must be registered")
+}
+
+func TestBuildHandler_EventsListRateLimited_Returns429AfterBurst(t *testing.T) {
+	// Spec: events-list.yaml border_case "31st request in the same minute from one
+	// IP (burst 30 exhausted) -> 429 RATE_LIMIT_EXCEEDED".
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+
+	var lastCode int
+	for i := 0; i < 31; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/events?year=abc", nil)
+		req.RemoteAddr = "203.0.113.7:1234"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		lastCode = rec.Code
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, lastCode)
+}
+
 func TestBuildHandler_AdminUnlockRouteRegistered(t *testing.T) {
 	// No token cookie → 401 TOKEN_MISSING from RequireAuth, not 404.
 	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)

@@ -4,7 +4,7 @@
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 
-# 201 — successful submission, no deadlines
+# 201 — successful submission, no deadlines, no tier (defaults to "unranked")
 echo "==> 201 submit without deadlines"
 curl -s -X POST "$BASE_URL/api/v1/events/submit" \
   -H "Content-Type: application/json" \
@@ -20,6 +20,25 @@ curl -s -X POST "$BASE_URL/api/v1/events/submit" \
     "website_url": "https://models2026.example.org",
     "domain": "computer_science",
     "submitter": {"name": "Ana Silva", "email": "ana@example.com"}
+  }' | jq .
+
+# 201 — successful submission with an explicit tier
+echo "==> 201 submit with tier"
+curl -s -X POST "$BASE_URL/api/v1/events/submit" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "International Conference on Software Engineering",
+    "slug": "ICSE2027TIER",
+    "country": "USA",
+    "city": "Boston",
+    "latitude": 42.3601,
+    "longitude": -71.0589,
+    "start_date": "2027-05-10",
+    "end_date": "2027-05-18",
+    "website_url": "https://icse2027.example.org",
+    "domain": "computer_science",
+    "tier": "A*",
+    "submitter": {"name": "John Doe", "email": "john@example.com"}
   }' | jq .
 
 # 201 — successful submission with deadlines
@@ -101,6 +120,25 @@ curl -s -X POST "$BASE_URL/api/v1/events/submit" \
     "end_date": "2026-09-25",
     "website_url": "models2026.example.org",
     "domain": "computer_science",
+    "submitter": {"name": "Ana Silva", "email": "ana@example.com"}
+  }' | jq .
+
+# 400 — tier not in allowed enum
+echo "==> 400 invalid tier"
+curl -s -X POST "$BASE_URL/api/v1/events/submit" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Invalid Tier Event",
+    "slug": "INVALIDTIER2026",
+    "country": "Brazil",
+    "city": "Recife",
+    "latitude": -8.0476,
+    "longitude": -34.8770,
+    "start_date": "2026-09-21",
+    "end_date": "2026-09-25",
+    "website_url": "https://example.org",
+    "domain": "computer_science",
+    "tier": "S",
     "submitter": {"name": "Ana Silva", "email": "ana@example.com"}
   }' | jq .
 

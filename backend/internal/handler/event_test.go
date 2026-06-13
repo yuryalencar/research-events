@@ -234,6 +234,89 @@ func TestEventHandler_Submit_InvalidWebsiteURL_ReturnsValidationError(t *testing
 	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
 }
 
+func TestEventHandler_Submit_WithTier_PersistsAndReturnsTier(t *testing.T) {
+	// Spec: events-submit.yaml DoD "Submission with a valid tier (e.g. 'A*') persists and returns that tier"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindActiveBySlug(gomock.Any(), "MODELS2026").Return(model.Event{}, repository.ErrNotFound)
+	repo.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, event model.Event, deadlines []model.Deadline, submitter model.User) (model.Event, error) {
+			event.ID = 1
+			event.CreatedBy = model.User{Name: submitter.Name, Email: submitter.Email, Role: model.UserRoleContributor}
+			event.LastUpdatedBy = event.CreatedBy
+			event.Deadlines = deadlines
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSubmitBody()
+	body["tier"] = "A*"
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, submitReq(t, body))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Tier string `json:"tier"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.Equal(t, "A*", resp.Data.Tier)
+}
+
+func TestEventHandler_Submit_WithoutTier_DefaultsToUnranked(t *testing.T) {
+	// Spec: events-submit.yaml DoD "Submission without tier returns tier='unranked' in the response"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindActiveBySlug(gomock.Any(), "MODELS2026").Return(model.Event{}, repository.ErrNotFound)
+	repo.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, event model.Event, deadlines []model.Deadline, submitter model.User) (model.Event, error) {
+			event.ID = 1
+			event.CreatedBy = model.User{Name: submitter.Name, Email: submitter.Email, Role: model.UserRoleContributor}
+			event.LastUpdatedBy = event.CreatedBy
+			event.Deadlines = deadlines
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, submitReq(t, validSubmitBody()))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Tier string `json:"tier"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.Equal(t, "unranked", resp.Data.Tier)
+}
+
+func TestEventHandler_Submit_InvalidTier_ReturnsValidationError(t *testing.T) {
+	// Spec: events-submit.yaml border_case "tier not in the allowed enum (e.g. 'S') → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSubmitBody()
+	body["tier"] = "S"
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, submitReq(t, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
 func TestEventHandler_Submit_InvalidDomain_ReturnsValidationError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

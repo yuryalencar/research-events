@@ -18,6 +18,9 @@ request:
     end_date: string, ISO date (required, must be >= start_date)
     website_url: string (required, must be a valid http/https URL)
     domain: string (required, enum: ["computer_science"])
+    tier: string (optional, enum: ["A*", "A", "B", "C", "unranked"], default "unranked")
+      # CORE-style conference ranking. Most submitters won't know it — omit to
+      # default to "unranked"; admins/moderators can set it later during review.
     submitter:
       name: string (required)
       email: string (required, valid email format)
@@ -43,6 +46,7 @@ responses:
         end_date: string
         website_url: string
         domain: string
+        tier: "A*" | "A" | "B" | "C" | "unranked"
         status: "pending"
         created_by:
           id: number
@@ -72,6 +76,9 @@ responses:
 rules:
   - All event fields are mandatory, including website_url — an event must be a complete, citable record
   - domain is an extensible string enum; only "computer_science" is valid for now
+  - tier is optional; omitted or empty string defaults to "unranked" (events.tier
+    is NOT NULL DEFAULT 'unranked' — see migrations/006_add_tier_to_events.sql)
+  - tier must be one of "A*", "A", "B", "C", "unranked" (events_tier_check CHECK constraint)
   - end_date must be >= start_date
   - Past dates are allowed (the event simply won't show under default "current year" filters)
   - latitude/longitude validated with standard geographic range checks only
@@ -107,6 +114,8 @@ border_cases:
   - Invalid submitter.email format → 400 VALIDATION_ERROR
   - website_url not a valid http/https URL → 400 VALIDATION_ERROR
   - domain not in the allowed enum → 400 VALIDATION_ERROR
+  - tier omitted or empty string → allowed, 201, tier="unranked"
+  - tier not in the allowed enum (e.g. "S") → 400 VALIDATION_ERROR
   - latitude/longitude out of range → 400 VALIDATION_ERROR
   - end_date earlier than start_date → 400 VALIDATION_ERROR
   - start_date/end_date in the past → allowed, 201
@@ -135,4 +144,7 @@ definition_of_done:
   - AuditLog row written for event creation (action=created)
   - AuditLog row written for each submitted deadline (action=deadline_added)
   - Event past dates (start_date/end_date in the past) are accepted (201)
+  - Submission without tier returns tier="unranked" in the response
+  - Submission with a valid tier (e.g. "A*") persists and returns that tier
+  - Submission with an invalid tier returns 400 VALIDATION_ERROR
   - All border cases above have a corresponding test case
