@@ -1,0 +1,205 @@
+feature: OpenTelemetry tracing (backend)
+
+description: >
+  Adds distributed tracing to the Go backend using the OpenTelemetry (OTel)
+  SDK. Every HTTP request automatically gets a root trace span (via the
+  otelhttp middleware), every GORM database query automatically gets a
+  child span (via the GORM OTel tracing plugin), and finished spans are
+  exported to Sentry via the sentry-go SDK's OpenTelemetry bridge
+  (github.com/getsentry/sentry-go/otel, package "sentryotel"). This is a
+  cross-cutting infrastructure feature — it has no new HTTP endpoints,
+  request/response shapes, or user-facing behaviour.
+
+  The OTel API itself remains standard and portable — otelhttp, the GORM
+  OTel plugin, and any future manual spans are all written against
+  go.opentelemetry.io/otel, not against sentry-go directly. Only the span
+  PROCESSOR (how finished spans get exported) is Sentry-specific
+  (sentryotel.NewSentrySpanProcessor), and the trace CONTEXT PROPAGATOR is
+  sentryotel.NewSentryPropagator(). sentry-go's own DSN parsing/auth/
+  transport (via sentry.Init) is reused — no manual OTLP endpoint/auth
+  derivation is needed.
+
+  OUT OF SCOPE: Sentry's panic/error-capture API (sentry.CaptureException
+  via a recover() middleware) is a separate concern and will be its own
+  spec. This feature only wires up OTel traces -> Sentry via sentryotel.
+  sentry.Init() is called here purely to configure the shared transport
+  that sentryotel's span processor uses — no error-capture middleware is
+  added in this feature.
+
+setup:
+  # One-time manual step — do this BEFORE Phase 3 (Red), since some tests
+  # may want a real-looking DSN value (even if pointed at a throwaway
+  # project) to exercise the "valid DSN" code path.
+  sentry_project_creation:
+    - "1. Go to https://sentry.io/signup/ and create a free account (or log into an existing one)."
+    - "2. Create a new Organization if you don't have one yet (or reuse an existing org)."
+    - "3. Click 'Create Project'. Choose platform 'Go' (search for 'Go' in the platform picker — generic Go, not a specific framework)."
+    - "4. Name the project 'research-events-api' (matches the service.name resource attribute set in this feature) and assign it to a team."
+    - "5. After creation, Sentry shows a DSN that looks like: https://<public_key>@<org_id>.ingest.<region>.sentry.io/<project_id>"
+    - "   Copy this full URL — it's the SENTRY_DSN value."
+    - "6. In backend/.env, set SENTRY_DSN=<the DSN you copied>. Leave it unset in .env.example (documented as optional there)."
+    - "7. In Sentry's left sidebar, go to Settings -> Projects -> research-events-api -> Tracing (or 'Performance') and confirm tracing/performance is enabled for the project — some Sentry plans/projects have it off by default."
+    - "8. Once this feature is implemented and the backend is running with SENTRY_DSN set, make a few requests (e.g. GET /health, GET /api/v1/events) and check Sentry's 'Performance' / 'Traces' view — you should see traces named after the HTTP routes, each with a nested DB query span."
+  notes:
+    - For local development without a Sentry account, simply leave
+      SENTRY_DSN unset — per this spec's "Missing DSN behavior" rule, the
+      app runs fine with a no-op tracer. Creating a Sentry project is only
+      needed when you want to actually SEE traces.
+    - Keep the DSN out of version control — backend/.env is gitignored;
+      only backend/.env.example (with SENTRY_DSN left blank/commented) is
+      committed.
+
+config:
+  new_env_vars:
+    SENTRY_DSN: string (optional)
+      # When empty/unset: tracer provider runs with NO span processor
+      # registered. Spans are still created (instrumentation code paths
+      # run normally, context propagation works), they are just never
+      # exported anywhere. App starts and serves traffic normally.
+      # sentry.Init() is NOT called in this case.
+      #
+      # When set: passed directly to
+      # sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN, ...}).
+      # sentry-go parses/validates the DSN and configures its transport —
+      # this feature does NOT parse the DSN itself or derive any endpoint
+      # URL. sentryotel.NewSentrySpanProcessor() is then registered on the
+      # OTel TracerProvider, reusing that transport for span export.
+
+  service_identification:
+    service.name: "research-events-api"   # OTel resource attribute, constant in code (not env-configurable)
+    service.version: cfg.AppVersion        # existing env var, reused as-is
+    deployment.environment: cfg.Env        # existing env var ("development" | "production"), reused as-is
+
+  sampling:
+    # tracesSampleRate, applied via ParentBased(TraceIDRatioBased(rate)):
+    #   cfg.Env == "development" -> rate = 1.0  (sample every trace)
+    #   cfg.Env == anything else -> rate = 0.2  (sample 20%)
+    # Never 0, per CLAUDE.md Monitoring section.
+
+rules:
+  - internal/observability/otel.go exports:
+      InitTracerProvider(ctx context.Context, cfg config.Config) (*sdktrace.TracerProvider, error)
+    - Builds a Resource with service.name, service.version,
+      deployment.environment (see service_identification above).
+    - Sampler = ParentBased(TraceIDRatioBased(rate)) per the sampling rule.
+    - If cfg.SentryDSN == "": does NOT call sentry.Init. Returns an
+      sdktrace.TracerProvider configured with the resource+sampler but NO
+      span processor registered (spans are created, dropped on End(),
+      nothing exported).
+    - If cfg.SentryDSN != "": calls
+      sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN, Environment:
+      cfg.Env, Release: cfg.AppVersion, TracesSampleRate: rate}). If
+      sentry.Init returns an error (e.g. malformed DSN), InitTracerProvider
+      wraps and returns that error — the caller (main.go) treats it as
+      fatal, same as DATABASE_URL/JWT_SECRET. On success, builds the
+      sdktrace.TracerProvider with
+      sdktrace.WithSpanProcessor(sentryotel.NewSentrySpanProcessor()) in
+      addition to the resource+sampler, and calls
+      otel.SetTextMapPropagator(sentryotel.NewSentryPropagator()) so trace
+      context propagates in Sentry's expected format.
+    - Returned provider is set as the global provider via
+      otel.SetTracerProvider(tp) by the caller (main.go), so
+      otel.Tracer(...) works anywhere in the codebase without passing the
+      provider around explicitly.
+
+  - main.go (startup sequence):
+    - After config.Load() and before opening routes: call
+      observability.InitTracerProvider(ctx, cfg); on error
+      (sentry.Init failed — malformed-but-non-empty SENTRY_DSN), log and
+      os.Exit(1) — same fail-fast pattern as DATABASE_URL/JWT_SECRET.
+    - After gorm.Open(...): register the GORM OTel tracing plugin via
+      db.Use(tracing.NewPlugin(tracing.WithoutQueryVariables())).
+      WithoutQueryVariables is REQUIRED — without it, SQL parameter values
+      (emails, names, etc.) would appear as span attributes, violating
+      CLAUDE.md's "never log sensitive data to Sentry" rule.
+    - Graceful shutdown sequence gains a step: after srv.Shutdown(ctx) and
+      before sqlDB.Close(), call tracerProvider.Shutdown(ctx) AND
+      sentry.Flush(ctx) (only if SENTRY_DSN was set), both bounded by a
+      shared 5s timeout, to flush any buffered spans through sentry-go's
+      transport. A timeout here logs a warning but does not prevent process
+      exit.
+
+  - cmd/api/server.go (BuildHandler):
+    - The entire mux is wrapped with otelhttp middleware
+      (go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp),
+      producing one root span per request with http.method and http.route
+      attributes populated automatically from the Go 1.22 ServeMux pattern
+      (e.g. "GET /api/v1/events").
+    - CORS middleware continues to wrap the outermost layer (unchanged from
+      current BuildHandler) — span creation happens for every request
+      regardless of whether CORS rejects it.
+
+  - GORM query spans:
+    - Produced automatically by the registered tracing plugin for every
+      query issued through *gorm.DB — no changes to repository code.
+    - Span attributes follow the plugin's own convention (db.system,
+      db.statement with variables redacted, db.operation, etc.) — this
+      feature does NOT hand-roll a separate "db.query" span naming scheme;
+      CLAUDE.md's "resource.action" naming convention applies to FUTURE
+      manual spans, not to this plugin's auto-generated ones.
+    - These spans nest under the request's root span because GORM is always
+      called with .WithContext(ctx) (already true throughout the
+      repository layer).
+
+  - No changes to internal/service/, internal/handler/ (beyond the
+    otelhttp wrap in server.go), or any API response shape. No new
+    middleware file is needed in internal/middleware/ — otelhttp wraps at
+    the BuildHandler level, same place CORS is applied.
+
+border_cases:
+  - SENTRY_DSN unset (default for local dev / CI) -> app starts normally,
+    sentry.Init is never called, spans created but not exported, an
+    info-level log line states tracing is running with no exporter.
+  - SENTRY_DSN set to a non-empty but malformed value -> sentry.Init returns
+    an error -> InitTracerProvider returns that error -> main.go logs and
+    exits non-zero at startup (fails the same way a bad DATABASE_URL does).
+  - Sentry transport unreachable at RUNTIME (Sentry down, network blip) ->
+    must NOT crash the app or add latency to requests — sentry-go's
+    transport is asynchronous; failed export attempts are
+    dropped/logged, not surfaced to the request.
+  - go test ./... runs with no SENTRY_DSN set -> tests must pass exactly as
+    they do today; no test requires network access or a real Sentry DSN,
+    and sentry.Init is never called during the test suite.
+  - Graceful shutdown: tracerProvider.Shutdown(ctx) and (if SENTRY_DSN was
+    set) sentry.Flush(ctx) given a shared 5s bound; if either can't flush in
+    time, log a warning and continue shutting down (does not block
+    indefinitely).
+  - ENV=development -> sample rate 1.0; ENV=production (or any other
+    value) -> sample rate 0.2. Never 0.
+
+definition_of_done:
+  - go.mod gains: go.opentelemetry.io/otel, go.opentelemetry.io/otel/sdk,
+    go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,
+    gorm.io/plugin/opentelemetry/tracing, github.com/getsentry/sentry-go,
+    and github.com/getsentry/sentry-go/otel (sentryotel) — exact versions
+    confirmed during implementation. No OTLP exporter dependency is needed.
+  - internal/observability/otel.go: InitTracerProvider(ctx, cfg)
+    (*sdktrace.TracerProvider, error), covered by tests for:
+    - no-op provider (no span processor, sentry.Init not called) when
+      SentryDSN == ""
+    - sentryotel span processor + propagator registered when SentryDSN is
+      a valid DSN
+    - error returned when SentryDSN is non-empty but malformed (sentry.Init
+      fails)
+    - sampler rate is 1.0 for Env=="development" and 0.2 otherwise
+  - internal/config: Config gains a SentryDSN field, passed through as-is
+    (no format validation in config.Load() — sentry.Init validates it).
+  - main.go: calls InitTracerProvider, sets the global tracer provider,
+    registers the GORM tracing plugin with WithoutQueryVariables, and
+    includes tracerProvider.Shutdown(ctx) + sentry.Flush(ctx) (shared
+    bounded 5s) in the graceful shutdown sequence.
+  - cmd/api/server.go: BuildHandler wraps the mux with otelhttp middleware.
+  - Test (in internal/handler or cmd/api, using an in-memory span
+    recorder/exporter): a request through BuildHandler produces exactly one
+    root span with http.method and http.route attributes matching the
+    request.
+  - Test: a request that triggers a GORM query (e.g. GET /api/v1/events
+    against the test DB) produces a child span under the request's root
+    span.
+  - Test: span attributes never contain raw SQL parameter values (e.g. an
+    email address used in a WHERE clause does not appear verbatim in any
+    span attribute).
+  - backend/.env and backend/.env.example document SENTRY_DSN as optional,
+    with a comment explaining the no-op fallback.
+  - go test ./... and go vet ./... remain fully green with SENTRY_DSN unset.
+  - All border cases above have a corresponding test case.
