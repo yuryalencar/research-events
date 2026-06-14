@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/yuryalencar/research-events/internal/model"
@@ -197,18 +196,9 @@ func toSubmitEventInput(req submitEventRequest) (service.SubmitEventInput, error
 		return service.SubmitEventInput{}, errors.New("end_date must be a valid date (YYYY-MM-DD)")
 	}
 
-	deadlines := make([]service.DeadlineInput, 0, len(req.Deadlines))
-	for i, d := range req.Deadlines {
-		date, err := time.Parse(dateLayout, d.Date)
-		if err != nil {
-			return service.SubmitEventInput{}, errors.New("deadlines[" + strconv.Itoa(i) + "].date must be a valid date (YYYY-MM-DD)")
-		}
-		deadlines = append(deadlines, service.DeadlineInput{
-			Type:        d.Type,
-			Description: d.Description,
-			Date:        date,
-			IsOptional:  d.IsOptional,
-		})
+	deadlines, err := toDeadlineInputs(req.Deadlines)
+	if err != nil {
+		return service.SubmitEventInput{}, err
 	}
 
 	return service.SubmitEventInput{

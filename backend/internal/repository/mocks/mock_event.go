@@ -42,6 +42,21 @@ func (m *MockEventRepository) EXPECT() *MockEventRepositoryMockRecorder {
 	return m.recorder
 }
 
+// AddDeadlines mocks base method.
+func (m *MockEventRepository) AddDeadlines(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User, auditAction model.AuditAction) (model.Event, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddDeadlines", ctx, event, deadlines, submitter, auditAction)
+	ret0, _ := ret[0].(model.Event)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddDeadlines indicates an expected call of AddDeadlines.
+func (mr *MockEventRepositoryMockRecorder) AddDeadlines(ctx, event, deadlines, submitter, auditAction any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDeadlines", reflect.TypeOf((*MockEventRepository)(nil).AddDeadlines), ctx, event, deadlines, submitter, auditAction)
+}
+
 // FindActiveBySlug mocks base method.
 func (m *MockEventRepository) FindActiveBySlug(ctx context.Context, slug string) (model.Event, error) {
 	m.ctrl.T.Helper()
@@ -55,6 +70,21 @@ func (m *MockEventRepository) FindActiveBySlug(ctx context.Context, slug string)
 func (mr *MockEventRepositoryMockRecorder) FindActiveBySlug(ctx, slug any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindActiveBySlug", reflect.TypeOf((*MockEventRepository)(nil).FindActiveBySlug), ctx, slug)
+}
+
+// FindByID mocks base method.
+func (m *MockEventRepository) FindByID(ctx context.Context, id uint) (model.Event, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByID", ctx, id)
+	ret0, _ := ret[0].(model.Event)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByID indicates an expected call of FindByID.
+func (mr *MockEventRepositoryMockRecorder) FindByID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByID", reflect.TypeOf((*MockEventRepository)(nil).FindByID), ctx, id)
 }
 
 // ListEvents mocks base method.

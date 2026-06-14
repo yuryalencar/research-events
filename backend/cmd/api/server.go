@@ -36,14 +36,16 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// See specs/backend/auth-login.yaml and auth-refresh-token.yaml rule sections.
 	rateLimiter := middleware.NewRateLimiter(10.0/60.0, 10)
 
-	// 50 requests/minute per IP — applied to public event submission.
-	// See specs/backend/events-submit.yaml rule "rate-limit 50 requests per minute per IP".
-	submitRateLimiter := middleware.NewRateLimiter(50.0/60.0, 50)
+	// 50 requests/minute per IP — shared by public write endpoints (event
+	// submission and adding deadlines to an approved event).
+	// See specs/backend/events-submit.yaml and events-deadlines-add.yaml,
+	// both specifying "rate-limit 50 requests per minute per IP".
+	publicRateLimiter := middleware.NewRateLimiter(50.0/60.0, 50)
 
 	// 120 requests/minute per IP, burst 30 — applied to the events list endpoint.
 	// See specs/backend/events-list.yaml rule "Highest limit in the app since this
 	// is the primary endpoint (globe + list views)".
-	listRateLimiter := middleware.NewRateLimiter(120.0/60.0, 30)
+	publicHighRateLimiter := middleware.NewRateLimiter(120.0/60.0, 30)
 
 	// --- Routes ---
 	mux := http.NewServeMux()
@@ -64,11 +66,16 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 
 	// Public event submission — no auth, rate-limited per events-submit.yaml.
 	mux.Handle("POST /api/v1/events/submit",
-		submitRateLimiter.Limit(http.HandlerFunc(eventHandler.Submit)))
+		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.Submit)))
 
 	// Public event list — no auth, rate-limited per events-list.yaml.
 	mux.Handle("GET /api/v1/events",
-		listRateLimiter.Limit(http.HandlerFunc(eventHandler.List)))
+		publicHighRateLimiter.Limit(http.HandlerFunc(eventHandler.List)))
+
+	// Public deadline additions to an approved event — no auth, rate-limited
+	// per events-deadlines-add.yaml.
+	mux.Handle("POST /api/v1/events/{id}/deadlines",
+		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.AddDeadlines)))
 
 	// Admin-only endpoints — RequireAuth then RequireRole("admin").
 	mux.Handle("PATCH /api/v1/admin/users/{id}/unlock",

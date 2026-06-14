@@ -36,6 +36,19 @@ type EventRepository interface {
 	// Each event's CreatedBy and LastUpdatedBy are preloaded, and Deadlines
 	// includes only is_active=true rows.
 	ListEvents(ctx context.Context, filter ListEventsFilter) ([]model.Event, int64, error)
+
+	// FindByID returns the event with the given ID, regardless of status.
+	// Returns ErrNotFound if no event has that ID.
+	FindByID(ctx context.Context, id uint) (model.Event, error)
+
+	// AddDeadlines persists new Deadlines on event, all within a single transaction:
+	// find-or-create submitter (same rules as Submit), insert deadlines with
+	// CreatedByID=submitter's ID, update event.LastUpdatedByID to submitter's ID, and
+	// write the AuditLog row(s) for auditAction (deadline_added or
+	// batch_deadlines_added) plus an "updated" row for the LastUpdatedByID change.
+	// Returns the event reloaded with CreatedBy/LastUpdatedBy preloaded and
+	// Deadlines containing all is_active=true rows (old and new).
+	AddDeadlines(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User, auditAction model.AuditAction) (model.Event, error)
 }
 
 // ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring
@@ -131,10 +144,7 @@ func (r *eventRepository) ListEvents(ctx context.Context, filter ListEventsFilte
 		return nil, 0, err
 	}
 
-	query := applyListEventsFilters(r.db.WithContext(ctx), filter).
-		Preload("CreatedBy").
-		Preload("LastUpdatedBy").
-		Preload("Deadlines", "is_active = ?", true).
+	query := preloadEventAssociations(applyListEventsFilters(r.db.WithContext(ctx), filter)).
 		Order("start_date ASC")
 
 	if !filter.PaginationOff {
@@ -187,6 +197,16 @@ func applyListEventsFilters(db *gorm.DB, filter ListEventsFilter) *gorm.DB {
 		)`, *filter.FirstDeadlineMonth, filter.Year)
 	}
 	return db
+}
+
+// preloadEventAssociations adds the CreatedBy/LastUpdatedBy/active-Deadlines
+// preloads shared by every query that returns a full Event to the API —
+// ListEvents and AddDeadlines's reload both build on this.
+func preloadEventAssociations(db *gorm.DB) *gorm.DB {
+	return db.
+		Preload("CreatedBy").
+		Preload("LastUpdatedBy").
+		Preload("Deadlines", "is_active = ?", true)
 }
 
 // findOrCreateSubmitter looks up a User by email within tx. If found, its name is

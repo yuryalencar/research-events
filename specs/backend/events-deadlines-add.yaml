@@ -1,0 +1,198 @@
+endpoint: POST /api/v1/events/{id}/deadlines
+
+description: >
+  Public endpoint that lets any contributor add one or more deadlines to an
+  already-approved event. This is the collaborative "keep deadlines fresh"
+  flow: e.g. contributor A submits an event with only the abstract deadline,
+  and later contributor B adds the paper and camera-ready deadlines once
+  they're announced. Looks up or creates a contributor User by submitter
+  email (same as events-submit), appends the new Deadline rows as
+  is_active=true, updates event.last_updated_by_id, and writes AuditLog rows.
+
+request:
+  path:
+    id: integer (required) # event ID
+
+  body:
+    submitter:
+      name: string (required)
+      email: string (required, valid email format)
+    deadlines: array (required, min 1 item)
+      - type: string (required, enum: ["abstract", "paper", "notification", "camera_ready", "other"])
+        description: string (required) # free text, e.g. "Research track"
+        date: string, ISO date (required)
+        is_optional: boolean (optional, default false)
+
+responses:
+  201:
+    description: Deadline(s) added successfully; returns the full updated event
+    body:
+      data:
+        id: number
+        name: string
+        slug: string
+        country: string
+        city: string
+        latitude: number
+        longitude: number
+        start_date: string
+        end_date: string
+        website_url: string
+        domain: string
+        tier: "A*" | "A" | "B" | "C" | "unranked"
+        status: "approved"
+        year: number
+        created_by:
+          id: number
+          name: string
+          email: string
+        last_updated_by:
+          id: number
+          name: string
+          email: string
+        deadlines: array of Deadline # all is_active=true deadlines, including the new ones
+          # NOTE — known gap, see known_limitations: a Deadline that has been
+          # superseded (is_active=false, superseded_by_id set) is NOT included
+          # here even though it is "related" to one of the active rows above.
+          # The UI currently has no way to show "this deadline was updated from
+          # <old date> to <new date>" from this response alone.
+        created_at: string, ISO timestamp
+        updated_at: string, ISO timestamp
+  400:
+    description: Validation error — missing/invalid field, empty deadlines array, or malformed JSON
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: "<field-specific message>"
+  404:
+    description: Event does not exist (also returned for a non-numeric :id, to avoid revealing whether IDs are numeric)
+    body:
+      error:
+        code: EVENT_NOT_FOUND
+        message: "event not found"
+  409:
+    description: Event exists but is not approved (status=pending or status=rejected)
+    body:
+      error:
+        code: EVENT_NOT_APPROVED
+        message: "deadlines can only be added to an approved event"
+  429:
+    description: Rate limit exceeded for this IP
+    body:
+      error:
+        code: RATE_LIMIT_EXCEEDED
+        message: "too many requests"
+
+rules:
+  - Public endpoint — no authentication required. Any visitor can submit deadline
+    updates for any approved event, regardless of who originally submitted it.
+  - The event identified by :id must exist AND have status=approved:
+    - :id does not correspond to any event, OR :id is not a positive integer
+      → 404 EVENT_NOT_FOUND (never reveal whether IDs are numeric)
+    - event exists with status=pending or status=rejected → 409 EVENT_NOT_APPROVED
+  - submitter is looked up/created exactly like events-submit's contributor flow:
+    - email matches an existing User (any role) → reused, name overwritten with
+      submitted submitter.name, no new User created
+    - email is new → new User created with role=contributor, password_hash=NULL
+  - deadlines is required and must contain at least one entry — an empty or
+    missing array is 400 VALIDATION_ERROR
+  - Each deadlines entry is validated the same as events-submit's DeadlineInput:
+    type/description/date required, type must be in the allowed enum
+  - Each new Deadline is created with is_active=true and created_by_id=submitter's user ID
+  - NO automatic supersession in this endpoint — duplicate deadlines (same type
+    and/or description as an existing active deadline) are allowed and simply
+    added as new active rows. We currently have no reliable way to determine
+    whether a new submission represents "the same deadline, updated" vs. "a
+    genuinely new deadline" (e.g. two tracks both having a "paper" deadline with
+    similar descriptions). A future endpoint will handle explicit deadline
+    updates/supersession (marking an existing deadline is_active=false and
+    linking superseded_by_id).
+  - event.last_updated_by_id is set to the submitter's user ID
+  - AuditLog rows written (all with changed_by_id = submitter's user ID):
+    - Exactly 1 deadline submitted → one row: entity_type=deadline,
+      entity_id=<new deadline's id>, action=deadline_added
+    - More than 1 deadline submitted → one row: entity_type=event,
+      entity_id=<event id>, action=batch_deadlines_added, diff lists the
+      created deadlines (id, type, description, date) — a single row covers
+      the whole batch rather than one row per deadline
+    - Always, in addition: one row entity_type=event, entity_id=<event id>,
+      action=updated, diff={"last_updated_by_id":{"before":<old>,"after":<new>}}
+      — this is the same "any update writes an AuditLog row and updates
+      last_updated_by_id" rule that will apply to all future event-update
+      endpoints, not just this one
+  - Migration required: add "batch_deadlines_added" to the
+    audit_logs_action_check CHECK constraint (migrations/002_create_audit_logs.sql
+    only allows created/updated/approved/rejected/deadline_added/deadline_superseded/unlocked today)
+  - Rate limit: 50 requests per minute per IP (same family as events-submit —
+    public write endpoint)
+
+known_limitations:
+  - This endpoint never creates superseded deadlines (see the "NO automatic
+    supersession" rule above), so it cannot itself produce the situation
+    described here — but the response shape it shares with GET /events and
+    GET /events/:id (toEventListItemResponse) is affected by it, so it's
+    documented here for whoever builds the future update/supersession endpoint.
+  - Today `deadlines` in the event response (and in CLAUDE.md's data model)
+    only ever contains is_active=true rows. Once a future endpoint introduces
+    supersession (is_active=false + superseded_by_id pointing at the
+    replacement row), an inactive deadline that is linked to an active one
+    represents "this deadline was updated" — e.g. paper deadline moved from
+    2026-08-22 to 2026-09-05.
+  - CLAUDE.md already covers the *full* history per type via
+    "GET /api/v1/events/:id/deadlines" (active + history, "view history"
+    toggle). That endpoint is unaffected by this gap.
+  - The gap is in the *summary* response (toEventListItemResponse, used by
+    GET /events, GET /events/:id, and this endpoint's 201 response): it has no
+    way to say "deadline X was just updated, here's the old and new value"
+    without the caller making a second request to /deadlines.
+  - Decision deferred to the future update/supersession endpoint's spec: either
+    (a) leave the summary response as-is (active deadlines only) and rely on
+    GET /events/:id/deadlines for "updated" history, or (b) extend each active
+    Deadline in the summary response with an optional `superseded` field
+    (previous type/description/date) when superseded_by_id points at it.
+
+permissions:
+  - Public endpoint — no authentication required
+  - Behavior is identical regardless of the submitter's existing role (admin,
+    moderator, or contributor) — role is not checked or changed by this endpoint
+
+border_cases:
+  - :id is not a positive integer (e.g. "abc") → 404 EVENT_NOT_FOUND
+  - :id does not match any event → 404 EVENT_NOT_FOUND
+  - event exists with status=pending → 409 EVENT_NOT_APPROVED
+  - event exists with status=rejected → 409 EVENT_NOT_APPROVED
+  - deadlines omitted or empty array → 400 VALIDATION_ERROR
+  - a deadlines entry missing type, description, or date → 400 VALIDATION_ERROR
+  - a deadlines entry with an invalid type value → 400 VALIDATION_ERROR
+  - a deadlines entry with an unparsable date → 400 VALIDATION_ERROR
+  - submitter.name missing → 400 VALIDATION_ERROR
+  - submitter.email missing or invalid format → 400 VALIDATION_ERROR
+  - malformed JSON body → 400 VALIDATION_ERROR
+  - duplicate deadline (same type/description/date as an existing active
+    deadline) → allowed, 201, both remain active (no dedup/supersession)
+  - submitter.email matches an existing User (any role) → event linked to that
+    user for this update, name updated, no new User created
+  - submitter.email is new → new User created with role=contributor, password_hash=NULL
+  - exactly 1 deadline submitted → AuditLog rows written: deadline_added (1) + updated (1)
+  - more than 1 deadline submitted → AuditLog rows written: batch_deadlines_added (1) + updated (1)
+  - More than 50 requests/min from one IP → 429 RATE_LIMIT_EXCEEDED
+
+definition_of_done:
+  - Returns 201 + full updated event (with all active deadlines, including new ones) on valid request
+  - Returns 404 EVENT_NOT_FOUND when :id is not a positive integer
+  - Returns 404 EVENT_NOT_FOUND when :id does not match any event
+  - Returns 409 EVENT_NOT_APPROVED when the event's status is pending or rejected
+  - Returns 400 VALIDATION_ERROR when deadlines is missing or empty
+  - Returns 400 VALIDATION_ERROR for each invalid deadlines entry (missing/invalid type, description, date)
+  - Returns 400 VALIDATION_ERROR for invalid/missing submitter fields
+  - Returns 400 VALIDATION_ERROR for malformed JSON
+  - New User with role=contributor and password_hash=NULL is created when submitter email is unseen
+  - Existing User (any role) is reused and its name updated when submitter email already exists
+  - Each new Deadline is created with is_active=true and created_by_id=submitter's user ID
+  - Duplicate deadlines (matching type/description/date of an existing active deadline) are accepted without supersession
+  - event.last_updated_by_id is updated to the submitter's user ID
+  - Submitting exactly 1 deadline writes one deadline_added AuditLog row + one event "updated" AuditLog row
+  - Submitting >1 deadlines writes one batch_deadlines_added AuditLog row + one event "updated" AuditLog row
+  - audit_logs_action_check constraint allows "batch_deadlines_added" (new migration)
+  - Returns 429 RATE_LIMIT_EXCEEDED after 50 requests/min from the same IP
+  - All border cases above have a corresponding test case

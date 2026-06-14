@@ -35,16 +35,6 @@ type SubmitterInput struct {
 	Email string
 }
 
-// DeadlineInput carries one deadline entry from the submission form.
-// Type is a plain string here (not model.DeadlineType) because it must be
-// validated against the allowed enum before it can be trusted as a domain value.
-type DeadlineInput struct {
-	Type        string
-	Description string
-	Date        time.Time
-	IsOptional  bool
-}
-
 // --- Package-level validation data ---
 
 // allowedDomains lists the currently accepted values for SubmitEventInput.Domain.
@@ -62,16 +52,6 @@ var allowedTiers = map[string]bool{
 	"B":        true,
 	"C":        true,
 	"unranked": true,
-}
-
-// allowedDeadlineTypes mirrors the deadlines_type_check CHECK constraint in
-// migrations/004_create_deadlines.sql — this is a closed enum.
-var allowedDeadlineTypes = map[string]bool{
-	"abstract":     true,
-	"paper":        true,
-	"notification": true,
-	"camera_ready": true,
-	"other":        true,
 }
 
 // slugPattern restricts slugs to URL-safe characters: letters, digits, hyphens, underscores.
@@ -161,25 +141,6 @@ func BuildEventFromInput(input SubmitEventInput) model.Event {
 	}
 }
 
-// FP: immutability
-// BuildDeadlinesFromInput returns a new slice of model.Deadline — it never
-// appends to or reuses the backing array of input. Each element is a fresh
-// value built from the corresponding DeadlineInput, with IsActive always true
-// for a newly submitted deadline (see migrations/004_create_deadlines.sql).
-func BuildDeadlinesFromInput(input []DeadlineInput) []model.Deadline {
-	deadlines := make([]model.Deadline, 0, len(input))
-	for _, d := range input {
-		deadlines = append(deadlines, model.Deadline{
-			Type:        model.DeadlineType(d.Type),
-			Description: d.Description,
-			Date:        d.Date,
-			IsOptional:  d.IsOptional,
-			IsActive:    true,
-		})
-	}
-	return deadlines
-}
-
 // FP: pure function
 // BuildSubmitterFromInput depends only on its argument and returns a new
 // model.User value. role=contributor and password_hash=nil are the defaults for
@@ -230,25 +191,4 @@ func isValidWebsiteURL(raw string) bool {
 		return false
 	}
 	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
-}
-
-// FP: pure function
-// validateDeadlineInput checks a single deadline entry. Returning a wrapped error
-// from ValidateSubmitEventInput (with the index) keeps this function focused on
-// one deadline at a time — function composition over a loop, rather than one
-// large function trying to validate everything at once.
-func validateDeadlineInput(d DeadlineInput) error {
-	if d.Type == "" {
-		return fmt.Errorf("type is required")
-	}
-	if !allowedDeadlineTypes[d.Type] {
-		return fmt.Errorf("type %q is not a recognized deadline type", d.Type)
-	}
-	if d.Description == "" {
-		return fmt.Errorf("description is required")
-	}
-	if d.Date.IsZero() {
-		return fmt.Errorf("date is required")
-	}
-	return nil
 }

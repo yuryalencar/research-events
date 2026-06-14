@@ -22,13 +22,14 @@ const (
 type AuditAction string
 
 const (
-	AuditActionCreated            AuditAction = "created"
-	AuditActionUpdated            AuditAction = "updated"
-	AuditActionApproved           AuditAction = "approved"
-	AuditActionRejected           AuditAction = "rejected"
-	AuditActionDeadlineAdded      AuditAction = "deadline_added"
-	AuditActionDeadlineSuperseded AuditAction = "deadline_superseded"
-	AuditActionUnlocked           AuditAction = "unlocked"
+	AuditActionCreated             AuditAction = "created"
+	AuditActionUpdated             AuditAction = "updated"
+	AuditActionApproved            AuditAction = "approved"
+	AuditActionRejected            AuditAction = "rejected"
+	AuditActionDeadlineAdded       AuditAction = "deadline_added"
+	AuditActionDeadlineSuperseded  AuditAction = "deadline_superseded"
+	AuditActionUnlocked            AuditAction = "unlocked"
+	AuditActionBatchDeadlinesAdded AuditAction = "batch_deadlines_added"
 )
 
 // JSONB is a byte slice that maps to a Postgres jsonb column.

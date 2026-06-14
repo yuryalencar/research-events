@@ -330,52 +330,6 @@ func TestBuildEventFromInput_CopiesAllScalarFields(t *testing.T) {
 	assert.Equal(t, input.Domain, event.Domain)
 }
 
-// --- BuildDeadlinesFromInput ---
-
-func TestBuildDeadlinesFromInput_EmptyInput_ReturnsEmptySlice(t *testing.T) {
-	// Spec: events-submit.yaml border_case "deadlines omitted or empty array → allowed, event created with no deadlines"
-	deadlines := service.BuildDeadlinesFromInput(nil)
-
-	assert.Empty(t, deadlines)
-}
-
-func TestBuildDeadlinesFromInput_SetsIsActiveTrue(t *testing.T) {
-	input := []service.DeadlineInput{
-		{Type: "paper", Description: "Research track full paper", Date: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)},
-	}
-
-	deadlines := service.BuildDeadlinesFromInput(input)
-
-	require.Len(t, deadlines, 1)
-	assert.True(t, deadlines[0].IsActive)
-}
-
-func TestBuildDeadlinesFromInput_DefaultsIsOptionalFalse(t *testing.T) {
-	input := []service.DeadlineInput{
-		{Type: "paper", Description: "Research track full paper", Date: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)},
-	}
-
-	deadlines := service.BuildDeadlinesFromInput(input)
-
-	require.Len(t, deadlines, 1)
-	assert.False(t, deadlines[0].IsOptional)
-}
-
-func TestBuildDeadlinesFromInput_PreservesProvidedFields(t *testing.T) {
-	date := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
-	input := []service.DeadlineInput{
-		{Type: "abstract", Description: "Research track abstract", Date: date, IsOptional: true},
-	}
-
-	deadlines := service.BuildDeadlinesFromInput(input)
-
-	require.Len(t, deadlines, 1)
-	assert.Equal(t, model.DeadlineTypeAbstract, deadlines[0].Type)
-	assert.Equal(t, "Research track abstract", deadlines[0].Description)
-	assert.Equal(t, date, deadlines[0].Date)
-	assert.True(t, deadlines[0].IsOptional)
-}
-
 // --- BuildSubmitterFromInput ---
 
 func TestBuildSubmitterFromInput_SetsRoleContributor(t *testing.T) {

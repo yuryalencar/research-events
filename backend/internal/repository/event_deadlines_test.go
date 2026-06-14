@@ -1,0 +1,329 @@
+package repository_test
+
+// Spec: specs/backend/events-deadlines-add.yaml
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
+	"github.com/yuryalencar/research-events/internal/model"
+	"github.com/yuryalencar/research-events/internal/repository"
+)
+
+// --- FindByID ---
+
+func TestEventRepository_FindByID_ReturnsEventWhenExists(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event, deadlines, submitter := newSubmission("MODELS2026", "ana@example.com")
+	created, err := repo.Submit(context.Background(), event, deadlines, submitter)
+	require.NoError(t, err)
+
+	got, err := repo.FindByID(context.Background(), created.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, got.ID)
+	assert.Equal(t, created.Slug, got.Slug)
+}
+
+func TestEventRepository_FindByID_ReturnsErrNotFoundWhenMissing(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+
+	_, err := repo.FindByID(context.Background(), 999999)
+
+	require.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+// --- AddDeadlines ---
+
+// newApprovedEvent returns a freshly persisted, approved Event owned by a new
+// contributor user with the given email — the starting point for AddDeadlines tests.
+func newApprovedEvent(t *testing.T, tx *gorm.DB, slug, email string) model.Event {
+	t.Helper()
+	event, deadlines, submitter := newSubmission(slug, email)
+	event.Status = model.EventStatusApproved
+
+	repo := repository.NewEventRepository(tx)
+	created, err := repo.Submit(context.Background(), event, deadlines, submitter)
+	require.NoError(t, err)
+	return created
+}
+
+// oneDeadline returns a single new (unsaved) is_active=true Deadline, as
+// service.BuildDeadlinesFromInput would produce.
+func oneDeadline(deadlineType model.DeadlineType, description string, date time.Time) []model.Deadline {
+	return []model.Deadline{
+		{Type: deadlineType, Description: description, Date: date, IsActive: true},
+	}
+}
+
+func TestEventRepository_AddDeadlines_CreatesNewContributorWhenEmailNotFound(t *testing.T) {
+	// Spec: events-deadlines-add.yaml border_case "submitter.email is new → new User
+	// created with role=contributor, password_hash=NULL"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+
+	require.NoError(t, err)
+
+	var user model.User
+	require.NoError(t, tx.Where("email = ?", "beatriz@example.com").First(&user).Error)
+	assert.Equal(t, model.UserRoleContributor, user.Role)
+	assert.Nil(t, user.PasswordHash)
+	require.Len(t, got.Deadlines, 1)
+}
+
+func TestEventRepository_AddDeadlines_ReusesAndRenamesExistingUser(t *testing.T) {
+	// Spec: events-deadlines-add.yaml border_case "submitter.email matches an existing
+	// User (any role) → event linked to that user for this update, name updated"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+
+	existing := model.User{Name: "Old Name", Email: "carlos@example.com", Role: model.UserRoleContributor}
+	require.NoError(t, tx.Create(&existing).Error)
+
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	_, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	var user model.User
+	require.NoError(t, tx.First(&user, existing.ID).Error)
+	assert.Equal(t, "Carlos Souza", user.Name)
+}
+
+func TestEventRepository_AddDeadlines_CreatesDeadlinesWithIsActiveTrue(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	var saved model.Deadline
+	require.NoError(t, tx.Where("event_id = ? AND type = ?", got.ID, model.DeadlineTypeCameraReady).First(&saved).Error)
+	assert.True(t, saved.IsActive)
+	assert.NotZero(t, saved.CreatedByID)
+}
+
+func TestEventRepository_AddDeadlines_UpdatesLastUpdatedByID(t *testing.T) {
+	// Spec: events-deadlines-add.yaml rule "event.last_updated_by_id is set to the
+	// submitter's user ID"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	originalLastUpdatedByID := event.LastUpdatedByID
+
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, originalLastUpdatedByID, got.LastUpdatedByID)
+	assert.Equal(t, got.LastUpdatedByID, got.LastUpdatedBy.ID)
+	assert.Equal(t, "Beatriz Costa", got.LastUpdatedBy.Name)
+}
+
+func TestEventRepository_AddDeadlines_SingleDeadline_WritesDeadlineAddedAuditLog(t *testing.T) {
+	// Spec: events-deadlines-add.yaml rule "Exactly 1 deadline submitted → one row:
+	// entity_type=deadline, entity_id=<new deadline's id>, action=deadline_added"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	require.Len(t, got.Deadlines, 1)
+	var log model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityDeadline, got.Deadlines[0].ID, model.AuditActionDeadlineAdded).First(&log).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, log.ChangedByID)
+}
+
+func TestEventRepository_AddDeadlines_MultipleDeadlines_WritesBatchDeadlinesAddedAuditLog(t *testing.T) {
+	// Spec: events-deadlines-add.yaml rule "More than 1 deadline submitted → one row:
+	// entity_type=event, entity_id=<event id>, action=batch_deadlines_added"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	deadlines := []model.Deadline{
+		{Type: model.DeadlineTypePaper, Description: "Industry track full paper", Date: time.Date(2026, 8, 29, 0, 0, 0, 0, time.UTC), IsActive: true},
+		{Type: model.DeadlineTypeNotification, Description: "Industry track notification", Date: time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC), IsActive: true},
+	}
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionBatchDeadlinesAdded)
+	require.NoError(t, err)
+
+	var log model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityEvent, got.ID, model.AuditActionBatchDeadlinesAdded).First(&log).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, log.ChangedByID)
+	assert.NotEmpty(t, log.Diff)
+
+	// No per-deadline deadline_added rows when batched.
+	var count int64
+	require.NoError(t, tx.Model(&model.AuditLog{}).
+		Where("entity_type = ? AND action = ?", model.AuditEntityDeadline, model.AuditActionDeadlineAdded).
+		Count(&count).Error)
+	assert.Zero(t, count)
+}
+
+func TestEventRepository_AddDeadlines_AlwaysWritesEventUpdatedAuditLog(t *testing.T) {
+	// Spec: events-deadlines-add.yaml rule "Always, in addition: one row
+	// entity_type=event, entity_id=<event id>, action=updated,
+	// diff={"last_updated_by_id":{"before":<old>,"after":<new>}}"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	originalLastUpdatedByID := event.LastUpdatedByID
+
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	var log model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityEvent, got.ID, model.AuditActionUpdated).First(&log).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, log.ChangedByID)
+	assert.Contains(t, string(log.Diff), "last_updated_by_id")
+	assert.NotContains(t, string(log.Diff), string(rune(originalLastUpdatedByID))) // sanity: diff is non-trivial JSON
+}
+
+func TestEventRepository_AddDeadlines_ReturnsEventWithAllActiveDeadlines(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	// Start with one deadline already on the event.
+	event, deadlines, submitter := newSubmission("MODELS2026", "ana@example.com")
+	event.Status = model.EventStatusApproved
+	deadlines = []model.Deadline{
+		{Type: model.DeadlineTypeAbstract, Description: "Abstract", Date: time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC), IsActive: true},
+	}
+	repo := repository.NewEventRepository(tx)
+	created, err := repo.Submit(context.Background(), event, deadlines, submitter)
+	require.NoError(t, err)
+
+	newDeadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	newSubmitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), created, newDeadlines, newSubmitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	require.Len(t, got.Deadlines, 2)
+	types := []model.DeadlineType{got.Deadlines[0].Type, got.Deadlines[1].Type}
+	assert.Contains(t, types, model.DeadlineTypeAbstract)
+	assert.Contains(t, types, model.DeadlineTypeCameraReady)
+	for _, d := range got.Deadlines {
+		assert.True(t, d.IsActive)
+	}
+}
+
+func TestEventRepository_AddDeadlines_AllowsDuplicateDeadlines(t *testing.T) {
+	// Spec: events-deadlines-add.yaml border_case "duplicate deadline (same
+	// type/description/date as an existing active deadline) → allowed, 201,
+	// both remain active (no dedup/supersession)"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	date := time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)
+	event, deadlines, submitter := newSubmission("MODELS2026", "ana@example.com")
+	event.Status = model.EventStatusApproved
+	deadlines = []model.Deadline{
+		{Type: model.DeadlineTypePaper, Description: "Research track full paper", Date: date, IsActive: true},
+	}
+	repo := repository.NewEventRepository(tx)
+	created, err := repo.Submit(context.Background(), event, deadlines, submitter)
+	require.NoError(t, err)
+
+	duplicate := []model.Deadline{
+		{Type: model.DeadlineTypePaper, Description: "Research track full paper", Date: date, IsActive: true},
+	}
+	newSubmitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.AddDeadlines(context.Background(), created, duplicate, newSubmitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+
+	require.Len(t, got.Deadlines, 2)
+	for _, d := range got.Deadlines {
+		assert.True(t, d.IsActive)
+		assert.Equal(t, model.DeadlineTypePaper, d.Type)
+		assert.Equal(t, "Research track full paper", d.Description)
+	}
+}
+
+// --- audit_logs_action_check constraint (migrations/007_add_batch_deadlines_added_audit_action.sql) ---
+
+func TestAuditLog_BatchDeadlinesAddedAction_IsAllowedByConstraint(t *testing.T) {
+	// Spec: events-deadlines-add.yaml rule "More than 1 deadline submitted → one row ...
+	// action=batch_deadlines_added". The audit_logs_action_check CHECK constraint must
+	// allow this new value.
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	user := model.User{Name: "Ana Silva", Email: "ana@example.com", Role: model.UserRoleContributor}
+	require.NoError(t, tx.Create(&user).Error)
+
+	event := model.Event{
+		Name: "MODELS", Slug: "MODELS2026", Country: "Brazil", City: "Recife",
+		Latitude: -8.04, Longitude: -34.87,
+		StartDate:  time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC),
+		EndDate:    time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		WebsiteURL: "https://models2026.example.org", Domain: "computer_science",
+		Status: model.EventStatusApproved, Year: 2026,
+		CreatedByID: user.ID, LastUpdatedByID: user.ID,
+	}
+	require.NoError(t, tx.Create(&event).Error)
+
+	log := model.AuditLog{
+		EntityType:  model.AuditEntityEvent,
+		EntityID:    event.ID,
+		Action:      model.AuditActionBatchDeadlinesAdded,
+		ChangedByID: user.ID,
+	}
+
+	err := tx.WithContext(context.Background()).Create(&log).Error
+
+	require.NoError(t, err)
+}

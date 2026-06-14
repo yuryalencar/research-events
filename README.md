@@ -167,6 +167,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-09 | [Auth Feature](ai-sessions/2026-06-09-auth-feature.md) | Login, refresh-token, logout, account unlock. Stateful JWT (JTI), token rotation, rate limiting, lockout. Users + audit_logs migrations. 94 tests. |
 | 2026-06-12 | [Event Submission Feature](ai-sessions/2026-06-12-event-submission-feature.md) | `POST /api/v1/events/submit` — public submission with contributor lookup/creation, optional deadlines, slug reuse via partial unique index, FP service layer. Events + deadlines migrations. 148 tests. |
 | 2026-06-13 | [Events List Feature](ai-sessions/2026-06-13-events-list-feature.md) | `GET /api/v1/events` — public, filterable (year/domain/country/status/tier/first_deadline_month/bbox) + paginated listing with active deadlines and attribution. New `tier` column + 120 req/min rate limiter. 207 tests. |
+| 2026-06-14 | [Add Deadlines to an Approved Event](ai-sessions/2026-06-14-event-deadlines-add-feature.md) | `POST /api/v1/events/{id}/deadlines` — public, lets any contributor add one or more deadlines to an approved event. Single vs. batch audit actions, `batch_deadlines_added` migration, shared 50 req/min rate limiter. 242 tests. |
 
 ## Specs
 
@@ -181,6 +182,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Database: Users table | [database-users.yaml](specs/backend/database-users.yaml) | Done |
 | Events: Submit | [events-submit.yaml](specs/backend/events-submit.yaml) | Done |
 | Events: List | [events-list.yaml](specs/backend/events-list.yaml) | Done |
+| Events: Add Deadlines | [events-deadlines-add.yaml](specs/backend/events-deadlines-add.yaml) | Done |
 
 ---
 
