@@ -104,11 +104,8 @@ func ValidateSubmitEventInput(input SubmitEventInput) error {
 	if !allowedTiers[normalizeTier(input.Tier)] {
 		return fmt.Errorf("tier %q is not a recognized tier", input.Tier)
 	}
-	if input.Submitter.Name == "" {
-		return fmt.Errorf("submitter.name is required")
-	}
-	if !emailPattern.MatchString(input.Submitter.Email) {
-		return fmt.Errorf("submitter.email must be a valid email address")
+	if err := validateSubmitterInput(input.Submitter); err != nil {
+		return err
 	}
 	for i, deadline := range input.Deadlines {
 		if err := validateDeadlineInput(deadline); err != nil {
@@ -179,6 +176,22 @@ func normalizeTier(tier string) string {
 		return "unranked"
 	}
 	return tier
+}
+
+// FP: pure function
+// validateSubmitterInput depends only on its argument and performs no I/O — no
+// lookup of whether the email already belongs to a User (that happens in the
+// repository layer's findOrCreateSubmitter). Shared by ValidateSubmitEventInput,
+// ValidateAddDeadlinesInput, and ValidateCancelDeadlineInput, since every
+// endpoint that accepts a `submitter: {name, email}` body validates it the same way.
+func validateSubmitterInput(s SubmitterInput) error {
+	if s.Name == "" {
+		return fmt.Errorf("submitter.name is required")
+	}
+	if !emailPattern.MatchString(s.Email) {
+		return fmt.Errorf("submitter.email must be a valid email address")
+	}
+	return nil
 }
 
 // FP: pure function

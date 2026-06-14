@@ -120,6 +120,99 @@ func TestValidateAddDeadlinesInput_SameInputTwice_ReturnsIdenticalResult(t *test
 	assert.Equal(t, err1, err2)
 }
 
+// --- ValidateCancelDeadlineInput ---
+
+// validCancelDeadlineInput returns a CancelDeadlineInput that passes every
+// validation rule. Each test mutates a copy of this baseline to isolate the
+// field under test.
+func validCancelDeadlineInput() service.CancelDeadlineInput {
+	return service.CancelDeadlineInput{
+		Submitter: service.SubmitterInput{
+			Name:  "Beatriz Costa",
+			Email: "beatriz@example.com",
+		},
+	}
+}
+
+func TestValidateCancelDeadlineInput_ValidInput_ReturnsNil(t *testing.T) {
+	err := service.ValidateCancelDeadlineInput(validCancelDeadlineInput())
+
+	require.NoError(t, err)
+}
+
+func TestValidateCancelDeadlineInput_MissingSubmitterName_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "submitter.name missing → 400 VALIDATION_ERROR"
+	input := validCancelDeadlineInput()
+	input.Submitter.Name = ""
+
+	err := service.ValidateCancelDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "submitter.name")
+}
+
+func TestValidateCancelDeadlineInput_InvalidSubmitterEmail_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "submitter.email missing or invalid format → 400 VALIDATION_ERROR"
+	input := validCancelDeadlineInput()
+	input.Submitter.Email = "not-an-email"
+
+	err := service.ValidateCancelDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "submitter.email")
+}
+
+func TestValidateCancelDeadlineInput_SameInputTwice_ReturnsIdenticalResult(t *testing.T) {
+	// FP: pure function — same input always produces the same output, no hidden state.
+	input := validCancelDeadlineInput()
+
+	err1 := service.ValidateCancelDeadlineInput(input)
+	err2 := service.ValidateCancelDeadlineInput(input)
+
+	assert.Equal(t, err1, err2)
+}
+
+// --- ValidateDeadlineCancellable ---
+
+func TestValidateDeadlineCancellable_ActiveDeadline_ReturnsNil(t *testing.T) {
+	deadline := model.Deadline{IsActive: true}
+
+	err := service.ValidateDeadlineCancellable(deadline)
+
+	require.NoError(t, err)
+}
+
+func TestValidateDeadlineCancellable_AlreadyInactiveDeadline_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "target deadline is already
+	// is_active=false (previously cancelled) → 409 DEADLINE_ALREADY_INACTIVE"
+	deadline := model.Deadline{IsActive: false}
+
+	err := service.ValidateDeadlineCancellable(deadline)
+
+	require.Error(t, err)
+}
+
+func TestValidateDeadlineCancellable_AlreadySupersededDeadline_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "target deadline is already
+	// is_active=false (superseded, superseded_by_id set) → 409 DEADLINE_ALREADY_INACTIVE"
+	supersededBy := uint(99)
+	deadline := model.Deadline{IsActive: false, SupersededByID: &supersededBy}
+
+	err := service.ValidateDeadlineCancellable(deadline)
+
+	require.Error(t, err)
+}
+
+func TestValidateDeadlineCancellable_SameInputTwice_ReturnsIdenticalResult(t *testing.T) {
+	// FP: pure function — same input always produces the same output, no hidden state.
+	deadline := model.Deadline{IsActive: false}
+
+	err1 := service.ValidateDeadlineCancellable(deadline)
+	err2 := service.ValidateDeadlineCancellable(deadline)
+
+	assert.Equal(t, err1, err2)
+}
+
 // --- DetermineDeadlinesAuditAction ---
 
 func TestDetermineDeadlinesAuditAction_SingleDeadline_ReturnsDeadlineAdded(t *testing.T) {

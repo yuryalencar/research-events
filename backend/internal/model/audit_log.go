@@ -30,6 +30,7 @@ const (
 	AuditActionDeadlineSuperseded  AuditAction = "deadline_superseded"
 	AuditActionUnlocked            AuditAction = "unlocked"
 	AuditActionBatchDeadlinesAdded AuditAction = "batch_deadlines_added"
+	AuditActionDeadlineCancelled   AuditAction = "deadline_cancelled"
 )
 
 // JSONB is a byte slice that maps to a Postgres jsonb column.

@@ -41,6 +41,11 @@ type EventRepository interface {
 	// Returns ErrNotFound if no event has that ID.
 	FindByID(ctx context.Context, id uint) (model.Event, error)
 
+	// FindDeadlineByID returns the deadline with the given ID if it belongs to
+	// eventID. Returns ErrNotFound if no deadline has that ID, or if it exists
+	// but belongs to a different event.
+	FindDeadlineByID(ctx context.Context, eventID, deadlineID uint) (model.Deadline, error)
+
 	// AddDeadlines persists new Deadlines on event, all within a single transaction:
 	// find-or-create submitter (same rules as Submit), insert deadlines with
 	// CreatedByID=submitter's ID, update event.LastUpdatedByID to submitter's ID, and
@@ -49,6 +54,14 @@ type EventRepository interface {
 	// Returns the event reloaded with CreatedBy/LastUpdatedBy preloaded and
 	// Deadlines containing all is_active=true rows (old and new).
 	AddDeadlines(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User, auditAction model.AuditAction) (model.Event, error)
+
+	// CancelDeadline marks deadline as is_active=false (superseded_by_id left nil)
+	// within a single transaction: find-or-create submitter (same rules as
+	// Submit/AddDeadlines), update event.LastUpdatedByID to submitter's ID, and
+	// write a deadline_cancelled AuditLog row plus an "updated" row for the
+	// LastUpdatedByID change. Returns the event reloaded with CreatedBy/LastUpdatedBy
+	// preloaded and Deadlines containing all remaining is_active=true rows.
+	CancelDeadline(ctx context.Context, event model.Event, deadline model.Deadline, submitter model.User) (model.Event, error)
 }
 
 // ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring

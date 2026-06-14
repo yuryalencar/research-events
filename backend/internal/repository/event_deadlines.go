@@ -21,6 +21,15 @@ func (r *eventRepository) FindByID(ctx context.Context, id uint) (model.Event, e
 	return event, err
 }
 
+func (r *eventRepository) FindDeadlineByID(ctx context.Context, eventID, deadlineID uint) (model.Deadline, error) {
+	var deadline model.Deadline
+	err := r.db.WithContext(ctx).Where("event_id = ?", eventID).First(&deadline, deadlineID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Deadline{}, ErrNotFound
+	}
+	return deadline, err
+}
+
 func (r *eventRepository) AddDeadlines(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User, auditAction model.AuditAction) (model.Event, error) {
 	oldLastUpdatedByID := event.LastUpdatedByID
 
@@ -44,6 +53,38 @@ func (r *eventRepository) AddDeadlines(ctx context.Context, event model.Event, d
 		}
 
 		auditLogs, err := buildAddDeadlinesAuditLogs(event, deadlines, auditAction, oldLastUpdatedByID, user.ID)
+		if err != nil {
+			return err
+		}
+		return tx.Create(&auditLogs).Error
+	})
+	if err != nil {
+		return model.Event{}, err
+	}
+
+	return r.findByIDWithActiveDeadlines(ctx, event.ID)
+}
+
+func (r *eventRepository) CancelDeadline(ctx context.Context, event model.Event, deadline model.Deadline, submitter model.User) (model.Event, error) {
+	oldLastUpdatedByID := event.LastUpdatedByID
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		user, err := findOrCreateSubmitter(tx, submitter)
+		if err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.Deadline{}).Where("id = ?", deadline.ID).
+			Update("is_active", false).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.Event{}).Where("id = ?", event.ID).
+			Update("last_updated_by_id", user.ID).Error; err != nil {
+			return err
+		}
+
+		auditLogs, err := buildCancelDeadlineAuditLogs(event, deadline, oldLastUpdatedByID, user.ID)
 		if err != nil {
 			return err
 		}
@@ -98,21 +139,52 @@ func buildAddDeadlinesAuditLogs(event model.Event, deadlines []model.Deadline, a
 		})
 	}
 
-	updatedDiff, err := json.Marshal(map[string]any{
-		"last_updated_by_id": map[string]any{"before": oldLastUpdatedByID, "after": newLastUpdatedByID},
-	})
+	updatedLog, err := buildLastUpdatedByIDAuditLog(event.ID, oldLastUpdatedByID, newLastUpdatedByID)
 	if err != nil {
 		return nil, err
 	}
-	logs = append(logs, model.AuditLog{
-		EntityType:  model.AuditEntityEvent,
-		EntityID:    event.ID,
-		Action:      model.AuditActionUpdated,
-		ChangedByID: newLastUpdatedByID,
-		Diff:        model.JSONB(updatedDiff),
-	})
+	logs = append(logs, updatedLog)
 
 	return logs, nil
+}
+
+// buildLastUpdatedByIDAuditLog returns the "updated" AuditLog row that records
+// an event.LastUpdatedByID change — written alongside every operation that
+// touches an event's deadlines (AddDeadlines, CancelDeadline), per CLAUDE.md's
+// "any update writes an AuditLog row and updates last_updated_by_id" rule.
+func buildLastUpdatedByIDAuditLog(eventID uint, oldLastUpdatedByID, newLastUpdatedByID uint) (model.AuditLog, error) {
+	diff, err := json.Marshal(map[string]any{
+		"last_updated_by_id": map[string]any{"before": oldLastUpdatedByID, "after": newLastUpdatedByID},
+	})
+	if err != nil {
+		return model.AuditLog{}, err
+	}
+	return model.AuditLog{
+		EntityType:  model.AuditEntityEvent,
+		EntityID:    eventID,
+		Action:      model.AuditActionUpdated,
+		ChangedByID: newLastUpdatedByID,
+		Diff:        model.JSONB(diff),
+	}, nil
+}
+
+// buildCancelDeadlineAuditLogs returns the two AuditLog rows for CancelDeadline:
+// one deadline_cancelled row for the cancelled Deadline, and one "updated" row
+// for the event.LastUpdatedByID change.
+func buildCancelDeadlineAuditLogs(event model.Event, deadline model.Deadline, oldLastUpdatedByID, newLastUpdatedByID uint) ([]model.AuditLog, error) {
+	updatedLog, err := buildLastUpdatedByIDAuditLog(event.ID, oldLastUpdatedByID, newLastUpdatedByID)
+	if err != nil {
+		return nil, err
+	}
+	return []model.AuditLog{
+		{
+			EntityType:  model.AuditEntityDeadline,
+			EntityID:    deadline.ID,
+			Action:      model.AuditActionDeadlineCancelled,
+			ChangedByID: newLastUpdatedByID,
+		},
+		updatedLog,
+	}, nil
 }
 
 // buildBatchDeadlinesDiff summarizes the newly created deadlines for a

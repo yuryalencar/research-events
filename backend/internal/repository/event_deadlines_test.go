@@ -293,6 +293,213 @@ func TestEventRepository_AddDeadlines_AllowsDuplicateDeadlines(t *testing.T) {
 	}
 }
 
+// --- FindDeadlineByID ---
+
+func TestEventRepository_FindDeadlineByID_ReturnsDeadlineWhenItBelongsToEvent(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+	updated, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+	require.Len(t, updated.Deadlines, 1)
+
+	got, err := repo.FindDeadlineByID(context.Background(), event.ID, updated.Deadlines[0].ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, updated.Deadlines[0].ID, got.ID)
+	assert.Equal(t, event.ID, got.EventID)
+}
+
+func TestEventRepository_FindDeadlineByID_ReturnsErrNotFoundWhenMissing(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+
+	_, err := repo.FindDeadlineByID(context.Background(), event.ID, 999999)
+
+	require.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+func TestEventRepository_FindDeadlineByID_ReturnsErrNotFoundWhenBelongsToDifferentEvent(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case ":deadlineId matches a deadline
+	// that belongs to a different event → 404 DEADLINE_NOT_FOUND"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	eventA := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	eventB := newApprovedEvent(t, tx, "ICSE2026", "carlos@example.com")
+
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+	updatedA, err := repo.AddDeadlines(context.Background(), eventA, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+	require.Len(t, updatedA.Deadlines, 1)
+
+	_, err = repo.FindDeadlineByID(context.Background(), eventB.ID, updatedA.Deadlines[0].ID)
+
+	require.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+// --- CancelDeadline ---
+
+// addOneDeadline adds a single active Camera-ready deadline (created by
+// beatriz@example.com) to event and returns the reloaded event, which contains
+// exactly one Deadline.
+func addOneDeadline(t *testing.T, tx *gorm.DB, event model.Event) model.Event {
+	t.Helper()
+	repo := repository.NewEventRepository(tx)
+	deadlines := oneDeadline(model.DeadlineTypeCameraReady, "Camera-ready", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	submitter := model.User{Name: "Beatriz Costa", Email: "beatriz@example.com", Role: model.UserRoleContributor}
+	updated, err := repo.AddDeadlines(context.Background(), event, deadlines, submitter, model.AuditActionDeadlineAdded)
+	require.NoError(t, err)
+	require.Len(t, updated.Deadlines, 1)
+	return updated
+}
+
+func TestEventRepository_CancelDeadline_SetsIsActiveFalseAndSupersededByIDNil(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml rule "Cancelling sets is_active=false on
+	// the target deadline and leaves superseded_by_id=NULL"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	_, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+	require.NoError(t, err)
+
+	var saved model.Deadline
+	require.NoError(t, tx.First(&saved, target.ID).Error)
+	assert.False(t, saved.IsActive)
+	assert.Nil(t, saved.SupersededByID)
+}
+
+func TestEventRepository_CancelDeadline_UpdatesLastUpdatedByID(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml rule "event.last_updated_by_id is set to
+	// the canceller's user ID"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+	originalLastUpdatedByID := withDeadline.LastUpdatedByID
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, originalLastUpdatedByID, got.LastUpdatedByID)
+	assert.Equal(t, got.LastUpdatedByID, got.LastUpdatedBy.ID)
+	assert.Equal(t, "Carlos Souza", got.LastUpdatedBy.Name)
+}
+
+func TestEventRepository_CancelDeadline_WritesDeadlineCancelledAndUpdatedAuditLogs(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml rule "AuditLog rows written ... entity_type=deadline,
+	// entity_id=<cancelled deadline's id>, action=deadline_cancelled ... entity_type=event,
+	// entity_id=<event id>, action=updated, diff={...last_updated_by_id...}"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+	require.NoError(t, err)
+
+	var cancelledLog model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityDeadline, target.ID, model.AuditActionDeadlineCancelled).First(&cancelledLog).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, cancelledLog.ChangedByID)
+
+	// AddDeadlines (via addOneDeadline) also wrote an entity_type=event,
+	// action=updated row — order by id DESC to get CancelDeadline's row.
+	var updatedLog model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityEvent, got.ID, model.AuditActionUpdated).Order("id DESC").First(&updatedLog).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, updatedLog.ChangedByID)
+}
+
+func TestEventRepository_CancelDeadline_CreatesContributorWhenEmailNotFound(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "submitter.email is new → new
+	// User created with role=contributor, password_hash=NULL"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	_, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+	require.NoError(t, err)
+
+	var user model.User
+	require.NoError(t, tx.Where("email = ?", "carlos@example.com").First(&user).Error)
+	assert.Equal(t, model.UserRoleContributor, user.Role)
+	assert.Nil(t, user.PasswordHash)
+}
+
+func TestEventRepository_CancelDeadline_ReusesExistingUserAndUpdatesName(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "submitter.email matches an
+	// existing User (any role) → event linked to that user for this update, name
+	// updated, no new User created"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+
+	existing := model.User{Name: "Old Name", Email: "carlos@example.com", Role: model.UserRoleContributor}
+	require.NoError(t, tx.Create(&existing).Error)
+
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	_, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+	require.NoError(t, err)
+
+	var user model.User
+	require.NoError(t, tx.First(&user, existing.ID).Error)
+	assert.Equal(t, "Carlos Souza", user.Name)
+}
+
+func TestEventRepository_CancelDeadline_AllowsCancellingLastActiveDeadline_ReturnsEmptyDeadlines(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml border_case "cancelling the only/last active
+	// deadline of the event → 200, allowed, `deadlines` in the response is an empty array"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	target := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	got, err := repo.CancelDeadline(context.Background(), withDeadline, target, submitter)
+
+	require.NoError(t, err)
+	assert.Empty(t, got.Deadlines)
+}
+
 // --- audit_logs_action_check constraint (migrations/007_add_batch_deadlines_added_audit_action.sql) ---
 
 func TestAuditLog_BatchDeadlinesAddedAction_IsAllowedByConstraint(t *testing.T) {
@@ -320,6 +527,47 @@ func TestAuditLog_BatchDeadlinesAddedAction_IsAllowedByConstraint(t *testing.T) 
 		EntityType:  model.AuditEntityEvent,
 		EntityID:    event.ID,
 		Action:      model.AuditActionBatchDeadlinesAdded,
+		ChangedByID: user.ID,
+	}
+
+	err := tx.WithContext(context.Background()).Create(&log).Error
+
+	require.NoError(t, err)
+}
+
+// --- audit_logs_action_check constraint (migrations/008_add_deadline_cancelled_audit_action.sql) ---
+
+func TestAuditLog_DeadlineCancelledAction_IsAllowedByConstraint(t *testing.T) {
+	// Spec: events-deadlines-cancel.yaml rule "entity_type=deadline, ...,
+	// action=deadline_cancelled". The audit_logs_action_check CHECK constraint
+	// must allow this new value.
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	user := model.User{Name: "Ana Silva", Email: "ana@example.com", Role: model.UserRoleContributor}
+	require.NoError(t, tx.Create(&user).Error)
+
+	event := model.Event{
+		Name: "MODELS", Slug: "MODELS2026", Country: "Brazil", City: "Recife",
+		Latitude: -8.04, Longitude: -34.87,
+		StartDate:  time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC),
+		EndDate:    time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		WebsiteURL: "https://models2026.example.org", Domain: "computer_science",
+		Status: model.EventStatusApproved, Year: 2026,
+		CreatedByID: user.ID, LastUpdatedByID: user.ID,
+	}
+	require.NoError(t, tx.Create(&event).Error)
+
+	deadline := model.Deadline{
+		EventID: event.ID, Type: model.DeadlineTypePaper, Description: "Research track full paper",
+		Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID,
+	}
+	require.NoError(t, tx.Create(&deadline).Error)
+
+	log := model.AuditLog{
+		EntityType:  model.AuditEntityDeadline,
+		EntityID:    deadline.ID,
+		Action:      model.AuditActionDeadlineCancelled,
 		ChangedByID: user.ID,
 	}
 

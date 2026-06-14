@@ -57,6 +57,21 @@ func (mr *MockEventRepositoryMockRecorder) AddDeadlines(ctx, event, deadlines, s
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDeadlines", reflect.TypeOf((*MockEventRepository)(nil).AddDeadlines), ctx, event, deadlines, submitter, auditAction)
 }
 
+// CancelDeadline mocks base method.
+func (m *MockEventRepository) CancelDeadline(ctx context.Context, event model.Event, deadline model.Deadline, submitter model.User) (model.Event, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelDeadline", ctx, event, deadline, submitter)
+	ret0, _ := ret[0].(model.Event)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CancelDeadline indicates an expected call of CancelDeadline.
+func (mr *MockEventRepositoryMockRecorder) CancelDeadline(ctx, event, deadline, submitter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelDeadline", reflect.TypeOf((*MockEventRepository)(nil).CancelDeadline), ctx, event, deadline, submitter)
+}
+
 // FindActiveBySlug mocks base method.
 func (m *MockEventRepository) FindActiveBySlug(ctx context.Context, slug string) (model.Event, error) {
 	m.ctrl.T.Helper()
@@ -85,6 +100,21 @@ func (m *MockEventRepository) FindByID(ctx context.Context, id uint) (model.Even
 func (mr *MockEventRepositoryMockRecorder) FindByID(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByID", reflect.TypeOf((*MockEventRepository)(nil).FindByID), ctx, id)
+}
+
+// FindDeadlineByID mocks base method.
+func (m *MockEventRepository) FindDeadlineByID(ctx context.Context, eventID, deadlineID uint) (model.Deadline, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindDeadlineByID", ctx, eventID, deadlineID)
+	ret0, _ := ret[0].(model.Deadline)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindDeadlineByID indicates an expected call of FindDeadlineByID.
+func (mr *MockEventRepositoryMockRecorder) FindDeadlineByID(ctx, eventID, deadlineID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindDeadlineByID", reflect.TypeOf((*MockEventRepository)(nil).FindDeadlineByID), ctx, eventID, deadlineID)
 }
 
 // ListEvents mocks base method.

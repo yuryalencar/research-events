@@ -18,6 +18,15 @@ type AddDeadlinesInput struct {
 	Deadlines []DeadlineInput
 }
 
+// CancelDeadlineInput groups all inputs for cancelling a single deadline on an
+// already-approved event, mirroring the request body defined in
+// specs/backend/events-deadlines-cancel.yaml. EventID and DeadlineID come from
+// path params, not the body — the handler validates those separately by
+// looking the event and deadline up, so only Submitter needs validation here.
+type CancelDeadlineInput struct {
+	Submitter SubmitterInput
+}
+
 // DeadlineInput carries one deadline entry from the submission form.
 // Type is a plain string here (not model.DeadlineType) because it must be
 // validated against the allowed enum before it can be trusted as a domain value.
@@ -70,11 +79,8 @@ func BuildDeadlinesFromInput(input []DeadlineInput) []model.Deadline {
 // ValidateSubmitEventInput in event.go, scoped to the fields
 // events-deadlines-add.yaml actually requires (submitter + deadlines).
 func ValidateAddDeadlinesInput(input AddDeadlinesInput) error {
-	if input.Submitter.Name == "" {
-		return fmt.Errorf("submitter.name is required")
-	}
-	if !emailPattern.MatchString(input.Submitter.Email) {
-		return fmt.Errorf("submitter.email must be a valid email address")
+	if err := validateSubmitterInput(input.Submitter); err != nil {
+		return err
 	}
 	if len(input.Deadlines) == 0 {
 		return fmt.Errorf("deadlines must contain at least one entry")
@@ -98,6 +104,37 @@ func DetermineDeadlinesAuditAction(count int) model.AuditAction {
 		return model.AuditActionDeadlineAdded
 	}
 	return model.AuditActionBatchDeadlinesAdded
+}
+
+// FP: pure function
+// ValidateCancelDeadlineInput depends only on its argument and performs no I/O —
+// no database lookup to check the event/deadline exist or the deadline is still
+// active (those checks happen in the repository layer, which is the only layer
+// with DB access). Given the same input it always returns the same error (or
+// nil), so it is trivially testable: no mocks, no setup, just input → output.
+// This mirrors ValidateAddDeadlinesInput, scoped to the only field
+// events-deadlines-cancel.yaml's request body has: submitter.
+func ValidateCancelDeadlineInput(input CancelDeadlineInput) error {
+	if err := validateSubmitterInput(input.Submitter); err != nil {
+		return err
+	}
+	return nil
+}
+
+// FP: pure function
+// ValidateDeadlineCancellable depends only on its argument and performs no I/O.
+// Given the same Deadline it always returns the same error (or nil) — it does
+// not re-fetch the deadline or check anything beyond the IsActive flag already
+// loaded by the repository. is_active=false covers two cases the caller cannot
+// tell apart from this function alone: the deadline was already cancelled
+// (SupersededByID == nil), or it was already superseded by a newer deadline
+// (SupersededByID != nil) — both are "already inactive" and cannot be
+// cancelled again.
+func ValidateDeadlineCancellable(d model.Deadline) error {
+	if !d.IsActive {
+		return fmt.Errorf("deadline is already inactive")
+	}
+	return nil
 }
 
 // --- Private functions ---

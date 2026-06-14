@@ -1,0 +1,184 @@
+endpoint: PATCH /api/v1/events/{eventId}/deadlines/{deadlineId}/cancel
+
+description: >
+  Public endpoint that lets any contributor cancel a deadline they (or someone
+  else) registered by mistake — the "god, I registered this deadline wrong"
+  flow. This is NOT the same as supersession: cancelling a deadline marks it
+  is_active=false with superseded_by_id left NULL, meaning "this deadline is
+  dead, there is no replacement" (as opposed to supersession, where
+  is_active=false + superseded_by_id points at the replacement row — see
+  events-deadlines-add.yaml known_limitations and CLAUDE.md's data model).
+  Looks up or creates a contributor User by submitter email (same as
+  events-submit / events-deadlines-add), writes a deadline_cancelled AuditLog
+  row, updates event.last_updated_by_id, and writes an "updated" AuditLog row.
+
+request:
+  path:
+    eventId: integer (required)    # event ID
+    deadlineId: integer (required) # deadline ID — must belong to eventId
+
+  body:
+    submitter:
+      name: string (required)
+      email: string (required, valid email format)
+
+responses:
+  200:
+    description: Deadline cancelled successfully; returns the full updated event
+    body:
+      data:
+        id: number
+        name: string
+        slug: string
+        country: string
+        city: string
+        latitude: number
+        longitude: number
+        start_date: string
+        end_date: string
+        website_url: string
+        domain: string
+        tier: "A*" | "A" | "B" | "C" | "unranked"
+        status: "approved"
+        year: number
+        created_by:
+          id: number
+          name: string
+          email: string
+        last_updated_by:
+          id: number
+          name: string
+          email: string
+        deadlines: array of Deadline # all remaining is_active=true deadlines (the cancelled one is gone from this list)
+        created_at: string, ISO timestamp
+        updated_at: string, ISO timestamp
+  400:
+    description: Validation error — missing/invalid submitter field, or malformed JSON
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: "<field-specific message>"
+  404:
+    description: >
+      Event does not exist (also returned for a non-numeric :eventId, to avoid
+      revealing whether IDs are numeric) — EVENT_NOT_FOUND.
+      OR: deadline does not exist, does not belong to eventId, or :deadlineId is
+      non-numeric (same non-revealing rationale) — DEADLINE_NOT_FOUND.
+    body:
+      error:
+        code: EVENT_NOT_FOUND | DEADLINE_NOT_FOUND
+        message: "event not found" | "deadline not found"
+  409:
+    description: >
+      Event exists but is not approved (status=pending or status=rejected) —
+      EVENT_NOT_APPROVED.
+      OR: deadline exists and belongs to this event, but is already
+      is_active=false (already cancelled, or already superseded) —
+      DEADLINE_ALREADY_INACTIVE.
+    body:
+      error:
+        code: EVENT_NOT_APPROVED | DEADLINE_ALREADY_INACTIVE
+        message: "deadlines can only be cancelled on an approved event" | "deadline is already inactive"
+  429:
+    description: Rate limit exceeded for this IP
+    body:
+      error:
+        code: RATE_LIMIT_EXCEEDED
+        message: "too many requests"
+
+rules:
+  - Public endpoint — no authentication required. Any visitor can cancel any
+    active deadline on any approved event, regardless of who created it
+    (matches events-deadlines-add.yaml's permission model).
+  - The event identified by :eventId must exist AND have status=approved:
+    - :eventId does not correspond to any event, OR :eventId is not a positive
+      integer → 404 EVENT_NOT_FOUND (never reveal whether IDs are numeric)
+    - event exists with status=pending or status=rejected → 409 EVENT_NOT_APPROVED
+  - The deadline identified by :deadlineId must exist AND belong to :eventId:
+    - :deadlineId does not correspond to any deadline, OR belongs to a
+      different event, OR is not a positive integer → 404 DEADLINE_NOT_FOUND
+      (never reveal whether IDs are numeric, or that the deadline exists under
+      a different event)
+  - The target deadline must currently be is_active=true:
+    - is_active=false already (whether previously cancelled or superseded) →
+      409 DEADLINE_ALREADY_INACTIVE
+  - submitter is looked up/created exactly like events-submit's and
+    events-deadlines-add's contributor flow:
+    - email matches an existing User (any role) → reused, name overwritten with
+      submitted submitter.name, no new User created
+    - email is new → new User created with role=contributor, password_hash=NULL
+  - Cancelling sets is_active=false on the target deadline and leaves
+    superseded_by_id=NULL — this is the field combination that means
+    "cancelled, no replacement" as opposed to "superseded, see
+    superseded_by_id" (supersession is out of scope for both this endpoint and
+    events-deadlines-add.yaml; a future endpoint will implement it).
+  - Cancelling the last remaining active deadline of an event is allowed — the
+    event simply ends up with zero active deadlines. The UI is expected to
+    handle an event with no upcoming deadlines gracefully (out of scope for
+    this spec).
+  - event.last_updated_by_id is set to the canceller's user ID
+  - AuditLog rows written (both with changed_by_id = canceller's user ID):
+    - entity_type=deadline, entity_id=<cancelled deadline's id>,
+      action=deadline_cancelled
+    - entity_type=event, entity_id=<event id>, action=updated,
+      diff={"last_updated_by_id":{"before":<old>,"after":<new>}} — same
+      "any update writes an AuditLog row and updates last_updated_by_id" rule
+      as events-deadlines-add.yaml
+  - Migration required: add "deadline_cancelled" to the audit_logs_action_check
+    CHECK constraint (currently allows created/updated/approved/rejected/
+    deadline_added/deadline_superseded/unlocked/batch_deadlines_added per
+    migrations/007_add_batch_deadlines_added_audit_action.sql)
+  - Rate limit: 50 requests per minute per IP — same publicRateLimiter bucket
+    as events-submit and events-deadlines-add (cmd/api/server.go)
+
+permissions:
+  - Public endpoint — no authentication required
+  - Behavior is identical regardless of the canceller's existing role (admin,
+    moderator, or contributor) and regardless of who created the deadline —
+    no ownership check
+
+border_cases:
+  - :eventId is not a positive integer (e.g. "abc") → 404 EVENT_NOT_FOUND
+  - :eventId does not match any event → 404 EVENT_NOT_FOUND
+  - event exists with status=pending → 409 EVENT_NOT_APPROVED
+  - event exists with status=rejected → 409 EVENT_NOT_APPROVED
+  - :deadlineId is not a positive integer (e.g. "abc") → 404 DEADLINE_NOT_FOUND
+  - :deadlineId does not match any deadline → 404 DEADLINE_NOT_FOUND
+  - :deadlineId matches a deadline that belongs to a different event →
+    404 DEADLINE_NOT_FOUND
+  - target deadline is already is_active=false (previously cancelled) →
+    409 DEADLINE_ALREADY_INACTIVE
+  - target deadline is already is_active=false (superseded, superseded_by_id
+    set) → 409 DEADLINE_ALREADY_INACTIVE (same code/message — caller cannot
+    distinguish "cancelled" from "superseded" from this response alone)
+  - cancelling the only/last active deadline of the event → 200, allowed,
+    `deadlines` in the response is an empty array
+  - submitter.name missing → 400 VALIDATION_ERROR
+  - submitter.email missing or invalid format → 400 VALIDATION_ERROR
+  - malformed JSON body → 400 VALIDATION_ERROR
+  - submitter.email matches an existing User (any role) → event linked to that
+    user for this update, name updated, no new User created
+  - submitter.email is new → new User created with role=contributor, password_hash=NULL
+  - More than 50 requests/min from one IP → 429 RATE_LIMIT_EXCEEDED
+
+definition_of_done:
+  - Returns 200 + full updated event (without the cancelled deadline in
+    `deadlines`) on valid request
+  - Returns 404 EVENT_NOT_FOUND when :eventId is not a positive integer
+  - Returns 404 EVENT_NOT_FOUND when :eventId does not match any event
+  - Returns 409 EVENT_NOT_APPROVED when the event's status is pending or rejected
+  - Returns 404 DEADLINE_NOT_FOUND when :deadlineId is not a positive integer
+  - Returns 404 DEADLINE_NOT_FOUND when :deadlineId does not match any deadline
+  - Returns 404 DEADLINE_NOT_FOUND when :deadlineId belongs to a different event
+  - Returns 409 DEADLINE_ALREADY_INACTIVE when the target deadline is already is_active=false
+  - Returns 400 VALIDATION_ERROR for invalid/missing submitter fields
+  - Returns 400 VALIDATION_ERROR for malformed JSON
+  - New User with role=contributor and password_hash=NULL is created when submitter email is unseen
+  - Existing User (any role) is reused and its name updated when submitter email already exists
+  - The target deadline ends with is_active=false and superseded_by_id=NULL
+  - Cancelling the last active deadline is accepted and returns `deadlines: []`
+  - event.last_updated_by_id is updated to the canceller's user ID
+  - Cancelling writes one deadline_cancelled AuditLog row + one event "updated" AuditLog row
+  - audit_logs_action_check constraint allows "deadline_cancelled" (new migration)
+  - Returns 429 RATE_LIMIT_EXCEEDED after 50 requests/min from the same IP
+  - All border cases above have a corresponding test case
