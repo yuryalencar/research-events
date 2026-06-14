@@ -133,6 +133,21 @@ func (mr *MockEventRepositoryMockRecorder) ListEvents(ctx, filter any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEvents", reflect.TypeOf((*MockEventRepository)(nil).ListEvents), ctx, filter)
 }
 
+// Review mocks base method.
+func (m *MockEventRepository) Review(ctx context.Context, updated model.Event, auditLog model.AuditLog) (model.Event, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Review", ctx, updated, auditLog)
+	ret0, _ := ret[0].(model.Event)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Review indicates an expected call of Review.
+func (mr *MockEventRepositoryMockRecorder) Review(ctx, updated, auditLog any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Review", reflect.TypeOf((*MockEventRepository)(nil).Review), ctx, updated, auditLog)
+}
+
 // Submit mocks base method.
 func (m *MockEventRepository) Submit(ctx context.Context, event model.Event, deadlines []model.Deadline, submitter model.User) (model.Event, error) {
 	m.ctrl.T.Helper()

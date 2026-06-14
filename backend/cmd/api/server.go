@@ -27,6 +27,7 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// --- Handlers ---
 	authHandler := handler.NewAuthHandler(userRepo, cfg.JWTSecret, logger)
 	adminUserHandler := handler.NewAdminUserHandler(userRepo, auditRepo, logger)
+	adminEventHandler := handler.NewAdminEventHandler(eventRepo, logger)
 	eventHandler := handler.NewEventHandler(eventRepo, logger)
 
 	// --- Middleware ---
@@ -92,6 +93,15 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 		authMiddleware.RequireAuth(
 			middleware.RequireRole("admin")(
 				http.HandlerFunc(adminUserHandler.Unlock),
+			),
+		),
+	)
+
+	// Admin/moderator endpoint — RequireAuth then RequireRole("admin", "moderator").
+	mux.Handle("PATCH /api/v1/admin/events/{id}/review",
+		authMiddleware.RequireAuth(
+			middleware.RequireRole("admin", "moderator")(
+				http.HandlerFunc(adminEventHandler.Review),
 			),
 		),
 	)

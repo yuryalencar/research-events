@@ -83,4 +83,5 @@ type AuditLog struct {
 	ChangedByID uint            `gorm:"not null"`
 	ChangedBy   User            `gorm:"foreignKey:ChangedByID"`
 	Diff        JSONB           `gorm:"type:jsonb"`
+	Reason      *string
 }

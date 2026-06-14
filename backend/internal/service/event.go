@@ -71,38 +71,20 @@ var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 // class of bugs where validation behaves differently depending on when or how
 // many times it runs.
 func ValidateSubmitEventInput(input SubmitEventInput) error {
-	if input.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-	if input.Slug == "" {
-		return fmt.Errorf("slug is required")
-	}
-	if !slugPattern.MatchString(input.Slug) {
-		return fmt.Errorf("slug must contain only letters, digits, hyphens, and underscores")
-	}
-	if input.Country == "" {
-		return fmt.Errorf("country is required")
-	}
-	if input.City == "" {
-		return fmt.Errorf("city is required")
-	}
-	if input.Latitude < -90 || input.Latitude > 90 {
-		return fmt.Errorf("latitude must be between -90 and 90")
-	}
-	if input.Longitude < -180 || input.Longitude > 180 {
-		return fmt.Errorf("longitude must be between -180 and 180")
-	}
-	if input.EndDate.Before(input.StartDate) {
-		return fmt.Errorf("end_date must not be before start_date")
-	}
-	if !isValidWebsiteURL(input.WebsiteURL) {
-		return fmt.Errorf("website_url must be a valid http or https URL")
-	}
-	if !allowedDomains[input.Domain] {
-		return fmt.Errorf("domain %q is not a recognized domain", input.Domain)
-	}
-	if !allowedTiers[normalizeTier(input.Tier)] {
-		return fmt.Errorf("tier %q is not a recognized tier", input.Tier)
+	if err := validateEventFields(eventFieldsInput{
+		Name:       input.Name,
+		Slug:       input.Slug,
+		Country:    input.Country,
+		City:       input.City,
+		Latitude:   input.Latitude,
+		Longitude:  input.Longitude,
+		StartDate:  input.StartDate,
+		EndDate:    input.EndDate,
+		WebsiteURL: input.WebsiteURL,
+		Domain:     input.Domain,
+		Tier:       normalizeTier(input.Tier),
+	}); err != nil {
+		return err
 	}
 	if err := validateSubmitterInput(input.Submitter); err != nil {
 		return err
@@ -176,6 +158,67 @@ func normalizeTier(tier string) string {
 		return "unranked"
 	}
 	return tier
+}
+
+// eventFieldsInput groups the Event-level fields that are validated identically
+// regardless of where they came from — a new submission (ValidateSubmitEventInput)
+// or an admin review edit (ValidateEditedEvent, in event_review.go). Keeping this
+// validation in one place means both callers always agree on what a "valid event"
+// looks like. Tier must already be normalized (see normalizeTier) before calling.
+type eventFieldsInput struct {
+	Name       string
+	Slug       string
+	Country    string
+	City       string
+	Latitude   float64
+	Longitude  float64
+	StartDate  time.Time
+	EndDate    time.Time
+	WebsiteURL string
+	Domain     string
+	Tier       string
+}
+
+// FP: pure function
+// validateEventFields depends only on its argument and performs no I/O. Given
+// the same eventFieldsInput it always returns the same error (or nil) — extracted
+// from ValidateSubmitEventInput so the exact same per-field rules apply to admin
+// review edits via ValidateEditedEvent, without duplicating any of these checks.
+func validateEventFields(f eventFieldsInput) error {
+	if f.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if f.Slug == "" {
+		return fmt.Errorf("slug is required")
+	}
+	if !slugPattern.MatchString(f.Slug) {
+		return fmt.Errorf("slug must contain only letters, digits, hyphens, and underscores")
+	}
+	if f.Country == "" {
+		return fmt.Errorf("country is required")
+	}
+	if f.City == "" {
+		return fmt.Errorf("city is required")
+	}
+	if f.Latitude < -90 || f.Latitude > 90 {
+		return fmt.Errorf("latitude must be between -90 and 90")
+	}
+	if f.Longitude < -180 || f.Longitude > 180 {
+		return fmt.Errorf("longitude must be between -180 and 180")
+	}
+	if f.EndDate.Before(f.StartDate) {
+		return fmt.Errorf("end_date must not be before start_date")
+	}
+	if !isValidWebsiteURL(f.WebsiteURL) {
+		return fmt.Errorf("website_url must be a valid http or https URL")
+	}
+	if !allowedDomains[f.Domain] {
+		return fmt.Errorf("domain %q is not a recognized domain", f.Domain)
+	}
+	if !allowedTiers[f.Tier] {
+		return fmt.Errorf("tier %q is not a recognized tier", f.Tier)
+	}
+	return nil
 }
 
 // FP: pure function

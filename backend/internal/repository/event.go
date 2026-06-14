@@ -75,6 +75,14 @@ type EventRepository interface {
 	// is_active=true row plus any is_active=false row that has
 	// superseded_by_id set (i.e. oldDeadline and newDeadline both appear).
 	SupersedeDeadline(ctx context.Context, event model.Event, oldDeadline model.Deadline, newDeadline model.Deadline, submitter model.User) (model.Event, error)
+
+	// Review persists updated (the full reviewed Event — status plus any edited
+	// fields and last_updated_by_id, as built by service.ApplyReview) and writes
+	// auditLog, all within a single transaction. Returns the event reloaded with
+	// CreatedBy/LastUpdatedBy preloaded and Deadlines containing all
+	// is_active=true rows, per admin-events-review.yaml's 200 response
+	// (eventListItemResponse shape).
+	Review(ctx context.Context, updated model.Event, auditLog model.AuditLog) (model.Event, error)
 }
 
 // ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring

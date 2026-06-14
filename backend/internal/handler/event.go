@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -55,6 +56,17 @@ type deadlineRequest struct {
 
 // dateLayout is the ISO date format used for start_date, end_date, and deadline dates.
 const dateLayout = "2006-01-02"
+
+// parseDateField parses raw as dateLayout, returning an error naming field —
+// shared by toSubmitEventInput and toEventEditInput so both report the same
+// "<field> must be a valid date (YYYY-MM-DD)" message on a malformed date.
+func parseDateField(field, raw string) (time.Time, error) {
+	d, err := time.Parse(dateLayout, raw)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s must be a valid date (YYYY-MM-DD)", field)
+	}
+	return d, nil
+}
 
 // --- Constructor ---
 
@@ -189,13 +201,13 @@ func toListEventsFilter(input service.ListEventsInput) repository.ListEventsFilt
 // toSubmitEventInput maps the JSON request into service.SubmitEventInput,
 // parsing date strings. Returns an error if any date is malformed.
 func toSubmitEventInput(req submitEventRequest) (service.SubmitEventInput, error) {
-	startDate, err := time.Parse(dateLayout, req.StartDate)
+	startDate, err := parseDateField("start_date", req.StartDate)
 	if err != nil {
-		return service.SubmitEventInput{}, errors.New("start_date must be a valid date (YYYY-MM-DD)")
+		return service.SubmitEventInput{}, err
 	}
-	endDate, err := time.Parse(dateLayout, req.EndDate)
+	endDate, err := parseDateField("end_date", req.EndDate)
 	if err != nil {
-		return service.SubmitEventInput{}, errors.New("end_date must be a valid date (YYYY-MM-DD)")
+		return service.SubmitEventInput{}, err
 	}
 
 	deadlines, err := toDeadlineInputs(req.Deadlines)

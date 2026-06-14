@@ -1,0 +1,191 @@
+endpoint: PATCH /api/v1/admin/events/{id}/review
+
+description: >
+  Lets an admin or moderator approve or reject an event submission, optionally
+  editing any of the event's own fields in the same request (e.g. fixing a
+  typo'd name, correcting coordinates, or normalizing the domain/tier before
+  approving). Deadlines are NOT edited here — reviewers use the existing
+  deadline endpoints (add / cancel / supersede) for that. An event can be
+  re-reviewed any number of times regardless of its current status (e.g.
+  approved -> rejected, or rejected -> approved).
+
+request:
+  body:
+    action: "approve" | "reject" (required)
+    reason: string
+      # Required (non-empty) when action="reject".
+      # Optional when action="approve" — a reviewer note, e.g. "looks good,
+      # fixed the typo in the conference name".
+    event: object (optional)
+      # Partial update — only the keys present are changed. Same fields and
+      # validation rules as events-submit.yaml's request body:
+      name: string
+      slug: string
+      country: string
+      city: string
+      latitude: number
+      longitude: number
+      start_date: string (YYYY-MM-DD)
+      end_date: string (YYYY-MM-DD)
+      website_url: string
+      domain: string
+      tier: string
+
+responses:
+  200:
+    description: Event reviewed (and optionally updated) successfully
+    body:
+      data:
+        # Same shape as events-list.yaml's eventListItemResponse.
+        status: "approved" | "rejected"
+  400:
+    description: Validation error
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: >
+          "action must be 'approve' or 'reject'" | "reason is required when
+          rejecting an event" | any per-field message from
+          events-submit.yaml's validation rules (e.g. "name is required",
+          "slug must contain only letters, digits, hyphens, and underscores",
+          "latitude must be between -90 and 90", "end_date must not be before
+          start_date", "website_url must be a valid http or https URL",
+          "domain %q is not a recognized domain", "tier %q is not a
+          recognized tier") for any field present in the "event" object
+  401:
+    description: Unauthenticated
+    body:
+      error:
+        code: TOKEN_MISSING | TOKEN_EXPIRED | TOKEN_INVALID
+        message: "..."
+  403:
+    description: Forbidden — wrong role, or moderator reviewing their own submission
+    body:
+      error:
+        code: FORBIDDEN | CANNOT_REVIEW_OWN_EVENT
+        message: "insufficient permissions" | "moderators cannot review an event they submitted themselves"
+  404:
+    description: Event not found
+    body:
+      error:
+        code: EVENT_NOT_FOUND
+        message: "event not found"
+  409:
+    description: Edited slug collides with another active event
+    body:
+      error:
+        code: SLUG_ALREADY_EXISTS
+        message: "an event with this slug already exists"
+
+rules:
+  - Requires authentication (RequireAuth) and role admin or moderator
+    (RequireRole("admin", "moderator")) — contributors get 403 FORBIDDEN.
+  - "action" sets event.status to "approved" or "rejected" and writes one
+    AuditLog row with action="approved" or action="rejected"
+    (entity_type=event, entity_id=<event id>).
+  - The AuditLog row's "reason" column stores the request's reason
+    (nullable — populated for rejections always, for approvals only if
+    provided). New nullable "reason" column on audit_logs, added via
+    migration — usable by future actions too, not just this endpoint.
+  - The AuditLog row's "diff" JSONB records {"status": {"before, after"}}
+    plus {"before", "after"} for every field present in the request's
+    "event" object that actually changed.
+  - Re-review is always allowed: any current status (pending, approved,
+    rejected) can transition to any other via "action" — no 409 for
+    "already reviewed".
+  - Fields in the optional "event" object are validated with the exact same
+    per-field rules as events-submit.yaml (ValidateSubmitEventInput) — the
+    edited event (existing values merged with the provided overrides) must
+    pass every check.
+  - If "event.start_date" changes, "year" is recomputed as
+    start_date.Year() (mirrors BuildEventFromInput at submission).
+  - If "event.slug" changes, the new slug must not collide with another
+    event that has status IN (pending, approved) — excluding the event
+    being reviewed itself. Collision -> 409 SLUG_ALREADY_EXISTS. (Mirrors
+    FindActiveBySlug's "rejected slugs are free for reuse" rule.)
+  - event.last_updated_by_id is set to the reviewing admin/moderator's user
+    ID, regardless of whether any "event" fields were edited.
+  - Moderators cannot review (approve OR reject) an event whose
+    created_by_id equals their own user ID — admins have no such
+    restriction and may review their own submissions.
+  - Public endpoint? No — JWT in HTTP-only cookie required, same as all
+    /api/v1/admin/* routes.
+
+permissions:
+  - admin: may review (approve/reject + edit) any event, including ones
+    they submitted themselves.
+  - moderator: may review (approve/reject + edit) any event EXCEPT one
+    where created_by_id == their own user ID -> 403 CANNOT_REVIEW_OWN_EVENT.
+  - contributor: 403 FORBIDDEN (RequireRole rejects before the handler runs).
+  - unauthenticated: 401 (RequireAuth rejects before the handler runs).
+
+border_cases:
+  - :id is non-numeric -> 400 VALIDATION_ERROR (":id must be a valid
+    integer" — mirrors admin-users-unlock.yaml's pattern for admin routes,
+    NOT the public 404-hides-numeric-ness pattern).
+  - event does not exist -> 404 EVENT_NOT_FOUND.
+  - "action" missing or not "approve"/"reject" -> 400 VALIDATION_ERROR.
+  - action="reject" with missing or empty "reason" -> 400 VALIDATION_ERROR.
+  - action="approve" with no "reason" -> allowed, reason column is NULL.
+  - action="approve" with a "reason" -> allowed, reason is stored.
+  - "event" object omitted entirely -> only status (and
+    last_updated_by_id) change; diff contains only the "status" key.
+  - "event.slug" provided but identical to the current slug -> no conflict
+    check needed (not a collision with itself), no-op for that field.
+  - "event.slug" collides with a DIFFERENT event that is pending or
+    approved -> 409 SLUG_ALREADY_EXISTS.
+  - "event.slug" collides with a DIFFERENT event that is status=rejected ->
+    allowed (rejected slugs are free for reuse).
+  - "event.start_date" edited -> "year" recomputed; diff includes both
+    "start_date" and "year" before/after.
+  - "event.end_date" edited to be before the (possibly also-edited)
+    start_date -> 400 VALIDATION_ERROR ("end_date must not be before
+    start_date").
+  - Any single invalid field in "event" (e.g. latitude=999, malformed
+    website_url, unrecognized domain/tier) -> 400 VALIDATION_ERROR with that
+    field's exact submission-validation message.
+  - Re-reviewing an already-approved event with action="reject" -> allowed,
+    status flips to "rejected", new AuditLog row written.
+  - Re-reviewing an already-rejected event with action="approve" -> allowed,
+    status flips to "approved", new AuditLog row written.
+  - Re-reviewing with action="approve" when status is already "approved" ->
+    allowed (no-op status change), AuditLog row still written (diff's
+    "status" before/after are equal).
+  - Moderator reviews an event where created_by_id == their own user ID ->
+    403 CANNOT_REVIEW_OWN_EVENT, regardless of action.
+  - Admin reviews an event where created_by_id == their own user ID ->
+    allowed.
+  - Contributor (or any non-admin/moderator role, if one existed) attempts
+    this endpoint -> 403 FORBIDDEN.
+  - No access token cookie, or expired/invalid token -> 401.
+  - Malformed JSON body -> 400 VALIDATION_ERROR.
+
+definition_of_done:
+  - 200 + full updated event (eventListItemResponse shape) on successful
+    approve or reject.
+  - action="approve" sets status=approved; action="reject" sets
+    status=rejected; both write one AuditLog row with the matching action.
+  - reason is required (non-empty) for action="reject" -> 400 if missing.
+  - reason is optional for action="approve" and stored in audit_logs.reason
+    when provided.
+  - New nullable "reason" column added to audit_logs via migration.
+  - Optional "event" object applies a partial update, validated with the
+    same per-field rules as events-submit.yaml.
+  - Editing start_date recomputes year.
+  - Editing slug to collide with another pending/approved event ->
+    409 SLUG_ALREADY_EXISTS; colliding with a rejected event's slug is
+    allowed.
+  - AuditLog diff records status before/after plus before/after for every
+    changed "event" field.
+  - last_updated_by_id is set to the reviewer on every successful review.
+  - Re-review works for all status transitions (pending/approved/rejected
+    -> pending/approved/rejected) with no 409 for "already reviewed".
+  - Moderators get 403 CANNOT_REVIEW_OWN_EVENT when created_by_id is their
+    own; admins are exempt from this check.
+  - 403 FORBIDDEN for contributor role (and any role other than
+    admin/moderator).
+  - 401 for missing/expired/invalid auth token.
+  - 400 VALIDATION_ERROR for non-numeric :id, missing/invalid action,
+    missing reason on reject, any invalid "event" field, malformed JSON.
+  - 404 EVENT_NOT_FOUND for a non-existent event id.
+  - All border cases above have a corresponding test case.
