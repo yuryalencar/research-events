@@ -215,6 +215,8 @@ func toDeadlineInputs(deadlines []deadlineRequest) ([]service.DeadlineInput, err
 			Type:        d.Type,
 			Description: d.Description,
 			Date:        date,
+			Time:        d.Time,
+			Timezone:    d.Timezone,
 			IsOptional:  d.IsOptional,
 		})
 	}

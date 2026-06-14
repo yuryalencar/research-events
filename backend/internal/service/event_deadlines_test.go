@@ -120,6 +120,91 @@ func TestValidateAddDeadlinesInput_SameInputTwice_ReturnsIdenticalResult(t *test
 	assert.Equal(t, err1, err2)
 }
 
+// --- ValidateAddDeadlinesInput: time/timezone ---
+// Spec: specs/backend/deadlines-add-time-timezone.yaml
+
+func TestValidateAddDeadlinesInput_DeadlineWithTimeAndTimezone_ReturnsNil(t *testing.T) {
+	deadlineTime := "23:59"
+	deadlineTimezone := "AoE"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Time = &deadlineTime
+	input.Deadlines[0].Timezone = &deadlineTimezone
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.NoError(t, err)
+}
+
+func TestValidateAddDeadlinesInput_DeadlineWithTimeOnly_ReturnsNil(t *testing.T) {
+	// Spec: border_case "only time provided, timezone omitted → valid, timezone null in response"
+	deadlineTime := "18:00"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Time = &deadlineTime
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.NoError(t, err)
+}
+
+func TestValidateAddDeadlinesInput_DeadlineWithTimezoneOnly_ReturnsNil(t *testing.T) {
+	// Spec: border_case "only timezone provided, time omitted → valid, time null in response"
+	deadlineTimezone := "UTC-3"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Timezone = &deadlineTimezone
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.NoError(t, err)
+}
+
+func TestValidateAddDeadlinesInput_DeadlineTimeNotZeroPadded_ReturnsError(t *testing.T) {
+	// Spec: border_case `time = "9:00" (not zero-padded) → 400 VALIDATION_ERROR`
+	deadlineTime := "9:00"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Time = &deadlineTime
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "time")
+}
+
+func TestValidateAddDeadlinesInput_DeadlineTimeHourOutOfRange_ReturnsError(t *testing.T) {
+	// Spec: border_case `time = "24:00" → 400 VALIDATION_ERROR`
+	deadlineTime := "24:00"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Time = &deadlineTime
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "time")
+}
+
+func TestValidateAddDeadlinesInput_DeadlineTimeMinuteOutOfRange_ReturnsError(t *testing.T) {
+	// Spec: border_case `time = "23:60" → 400 VALIDATION_ERROR`
+	deadlineTime := "23:60"
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Time = &deadlineTime
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "time")
+}
+
+func TestValidateAddDeadlinesInput_DeadlineEmptyTimezone_ReturnsError(t *testing.T) {
+	// Spec: border_case `timezone = "" (explicit empty string) → 400 VALIDATION_ERROR`
+	deadlineTimezone := ""
+	input := validAddDeadlinesInput()
+	input.Deadlines[0].Timezone = &deadlineTimezone
+
+	err := service.ValidateAddDeadlinesInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timezone")
+}
+
 // --- ValidateCancelDeadlineInput ---
 
 // validCancelDeadlineInput returns a CancelDeadlineInput that passes every
@@ -268,6 +353,27 @@ func TestBuildDeadlinesFromInput_DefaultsIsOptionalFalse(t *testing.T) {
 
 	require.Len(t, deadlines, 1)
 	assert.False(t, deadlines[0].IsOptional)
+}
+
+func TestBuildDeadlinesFromInput_MapsTimeAndTimezoneThrough(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml — "BuildDeadlinesFromInput maps
+	// Time/Timezone through unchanged (immutability)"
+	deadlineTime := "23:59"
+	deadlineTimezone := "AoE"
+	input := []service.DeadlineInput{
+		{Type: "paper", Description: "Research track full paper", Date: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC), Time: &deadlineTime, Timezone: &deadlineTimezone},
+		{Type: "camera_ready", Description: "Research track camera-ready", Date: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	deadlines := service.BuildDeadlinesFromInput(input)
+
+	require.Len(t, deadlines, 2)
+	require.NotNil(t, deadlines[0].Time)
+	require.NotNil(t, deadlines[0].Timezone)
+	assert.Equal(t, "23:59", *deadlines[0].Time)
+	assert.Equal(t, "AoE", *deadlines[0].Timezone)
+	assert.Nil(t, deadlines[1].Time)
+	assert.Nil(t, deadlines[1].Timezone)
 }
 
 func TestBuildDeadlinesFromInput_PreservesProvidedFields(t *testing.T) {

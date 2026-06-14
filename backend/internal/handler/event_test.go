@@ -146,6 +146,76 @@ func TestEventHandler_Submit_ReturnsCreatedEventWithDeadlines(t *testing.T) {
 	assert.False(t, resp.Data.Deadlines[1].IsOptional)
 }
 
+func TestEventHandler_Submit_ReturnsDeadlineTimeAndTimezoneInResponse(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml — "POST /api/v1/events/submit
+	// accepts and returns time/timezone per deadline"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindActiveBySlug(gomock.Any(), "MODELS2026TZ").Return(model.Event{}, repository.ErrNotFound)
+	repo.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, event model.Event, deadlines []model.Deadline, submitter model.User) (model.Event, error) {
+			event.ID = 1
+			for i := range deadlines {
+				deadlines[i].ID = uint(i + 1)
+				deadlines[i].EventID = event.ID
+			}
+			event.Deadlines = deadlines
+			event.CreatedBy = model.User{Name: submitter.Name, Email: submitter.Email, Role: model.UserRoleContributor}
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSubmitBody()
+	body["slug"] = "MODELS2026TZ"
+	body["deadlines"] = []map[string]any{
+		{"type": "paper", "description": "Research track full paper", "date": "2026-08-22", "time": "23:59", "timezone": "AoE"},
+		{"type": "camera_ready", "description": "Research track camera-ready", "date": "2026-10-01"},
+	}
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, submitReq(t, body))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Deadlines []struct {
+				Time     *string `json:"time"`
+				Timezone *string `json:"timezone"`
+			} `json:"deadlines"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Len(t, resp.Data.Deadlines, 2)
+	require.NotNil(t, resp.Data.Deadlines[0].Time)
+	require.NotNil(t, resp.Data.Deadlines[0].Timezone)
+	assert.Equal(t, "23:59", *resp.Data.Deadlines[0].Time)
+	assert.Equal(t, "AoE", *resp.Data.Deadlines[0].Timezone)
+	assert.Nil(t, resp.Data.Deadlines[1].Time)
+	assert.Nil(t, resp.Data.Deadlines[1].Timezone)
+}
+
+func TestEventHandler_Submit_InvalidDeadlineTime_ReturnsValidationError(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml border_case `time = "24:00" → 400 VALIDATION_ERROR`
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSubmitBody()
+	body["deadlines"] = []map[string]any{
+		{"type": "paper", "description": "Research track full paper", "date": "2026-08-22", "time": "24:00"},
+	}
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, submitReq(t, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
 func TestEventHandler_Submit_ReturnsCreatedForPastDates(t *testing.T) {
 	// Spec: events-submit.yaml border_case "start_date/end_date in the past → allowed, 201"
 	ctrl := gomock.NewController(t)

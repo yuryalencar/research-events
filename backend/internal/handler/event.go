@@ -45,10 +45,12 @@ type submitterRequest struct {
 }
 
 type deadlineRequest struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Date        string `json:"date"`
-	IsOptional  bool   `json:"is_optional"`
+	Type        string  `json:"type"`
+	Description string  `json:"description"`
+	Date        string  `json:"date"`
+	Time        *string `json:"time,omitempty"`
+	Timezone    *string `json:"timezone,omitempty"`
+	IsOptional  bool    `json:"is_optional"`
 }
 
 // dateLayout is the ISO date format used for start_date, end_date, and deadline dates.
@@ -230,12 +232,14 @@ type userResponse struct {
 
 // deadlineResponse is one entry in the event response's deadlines array.
 type deadlineResponse struct {
-	ID          uint   `json:"id"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Date        string `json:"date"`
-	IsOptional  bool   `json:"is_optional"`
-	IsActive    bool   `json:"is_active"`
+	ID          uint    `json:"id"`
+	Type        string  `json:"type"`
+	Description string  `json:"description"`
+	Date        string  `json:"date"`
+	Time        *string `json:"time"`
+	Timezone    *string `json:"timezone"`
+	IsOptional  bool    `json:"is_optional"`
+	IsActive    bool    `json:"is_active"`
 }
 
 // eventResponse is the "data" payload for a successful submission, per
@@ -295,6 +299,8 @@ func toDeadlineResponses(deadlines []model.Deadline) []deadlineResponse {
 			Type:        string(d.Type),
 			Description: d.Description,
 			Date:        d.Date.Format(dateLayout),
+			Time:        d.Time,
+			Timezone:    d.Timezone,
 			IsOptional:  d.IsOptional,
 			IsActive:    d.IsActive,
 		})

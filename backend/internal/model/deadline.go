@@ -32,8 +32,14 @@ type Deadline struct {
 	Type        DeadlineType `gorm:"not null"`
 	Description string       `gorm:"not null"`
 	Date        time.Time    `gorm:"not null"`
-	IsOptional  bool         `gorm:"not null;default:false"`
-	IsActive    bool         `gorm:"not null;default:true"`
+
+	// Time and Timezone are independently optional — a deadline may have a
+	// date only, a date+time, or a date+time+timezone (e.g. "23:59" + "AoE").
+	Time     *string `gorm:"type:varchar(5)"`
+	Timezone *string `gorm:"type:varchar(50)"`
+
+	IsOptional bool `gorm:"not null;default:false"`
+	IsActive   bool `gorm:"not null;default:true"`
 
 	// SupersededByID points at the Deadline that replaced this one, once superseded.
 	SupersededByID *uint

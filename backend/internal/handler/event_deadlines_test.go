@@ -146,6 +146,71 @@ func TestEventHandler_AddDeadlines_ReturnsUpdatedEventOnMultipleDeadlines(t *tes
 	require.Len(t, resp.Data.Deadlines, 2)
 }
 
+func TestEventHandler_AddDeadlines_ReturnsDeadlineTimeAndTimezoneInResponse(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml — "POST /api/v1/events/{id}/deadlines
+	// accepts and returns time/timezone per deadline"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().AddDeadlines(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), model.AuditActionDeadlineAdded).
+		DoAndReturn(func(_ any, event model.Event, deadlines []model.Deadline, submitter model.User, _ model.AuditAction) (model.Event, error) {
+			for i := range deadlines {
+				deadlines[i].ID = uint(i + 1)
+				deadlines[i].EventID = event.ID
+			}
+			event.Deadlines = deadlines
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validAddDeadlinesBody()
+	body["deadlines"] = []map[string]any{
+		{"type": "camera_ready", "description": "Research track camera-ready", "date": "2026-10-01", "time": "18:00", "timezone": "UTC-3"},
+	}
+	rec := httptest.NewRecorder()
+
+	h.AddDeadlines(rec, addDeadlinesReq(t, "1", body))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Deadlines []struct {
+				Time     *string `json:"time"`
+				Timezone *string `json:"timezone"`
+			} `json:"deadlines"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Len(t, resp.Data.Deadlines, 1)
+	require.NotNil(t, resp.Data.Deadlines[0].Time)
+	require.NotNil(t, resp.Data.Deadlines[0].Timezone)
+	assert.Equal(t, "18:00", *resp.Data.Deadlines[0].Time)
+	assert.Equal(t, "UTC-3", *resp.Data.Deadlines[0].Timezone)
+}
+
+func TestEventHandler_AddDeadlines_EmptyTimezone_ReturnsValidationError(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml border_case `timezone = "" (explicit empty string) → 400 VALIDATION_ERROR`
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validAddDeadlinesBody()
+	body["deadlines"] = []map[string]any{
+		{"type": "paper", "description": "Research track full paper", "date": "2026-08-22", "timezone": ""},
+	}
+	rec := httptest.NewRecorder()
+
+	h.AddDeadlines(rec, addDeadlinesReq(t, "1", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
 func TestEventHandler_AddDeadlines_ReturnsNotFoundForNonNumericID(t *testing.T) {
 	// Spec: events-deadlines-add.yaml border_case ":id is not a positive integer (e.g. "abc") → 404 EVENT_NOT_FOUND"
 	ctrl := gomock.NewController(t)
@@ -392,6 +457,50 @@ func TestEventHandler_CancelDeadline_ReturnsUpdatedEventOnSuccess(t *testing.T) 
 	assert.Equal(t, "approved", resp.Data.Status)
 	assert.Equal(t, "carlos@example.com", resp.Data.LastUpdatedBy.Email)
 	assert.Empty(t, resp.Data.Deadlines)
+}
+
+func TestEventHandler_CancelDeadline_ReloadedEventIncludesTimeAndTimezoneOnRemainingDeadlines(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml — "PATCH .../cancel's reloaded
+	// event returns time/timezone for each deadline"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	remainingTime := "23:59"
+	remainingTimezone := "AoE"
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(10)).Return(activeDeadline(10, 1), nil)
+	repo.EXPECT().CancelDeadline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, event model.Event, _ model.Deadline, submitter model.User) (model.Event, error) {
+			event.Deadlines = []model.Deadline{
+				{Model: gorm.Model{ID: 11}, EventID: 1, Type: model.DeadlineTypePaper, IsActive: true, Time: &remainingTime, Timezone: &remainingTimezone},
+			}
+			event.LastUpdatedBy = model.User{Name: submitter.Name, Email: submitter.Email, Role: model.UserRoleContributor}
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.CancelDeadline(rec, cancelDeadlineReq(t, "1", "10", validCancelDeadlineBody()))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Deadlines []struct {
+				Time     *string `json:"time"`
+				Timezone *string `json:"timezone"`
+			} `json:"deadlines"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Len(t, resp.Data.Deadlines, 1)
+	require.NotNil(t, resp.Data.Deadlines[0].Time)
+	require.NotNil(t, resp.Data.Deadlines[0].Timezone)
+	assert.Equal(t, "23:59", *resp.Data.Deadlines[0].Time)
+	assert.Equal(t, "AoE", *resp.Data.Deadlines[0].Timezone)
 }
 
 func TestEventHandler_CancelDeadline_ReturnsNotFoundForNonNumericEventID(t *testing.T) {

@@ -722,6 +722,55 @@ func TestEventRepository_Submit_CreatesDeadlinesWithIsActiveTrue(t *testing.T) {
 	assert.NotZero(t, got.Deadlines[0].CreatedByID)
 }
 
+func TestEventRepository_Submit_PersistsDeadlineTimeAndTimezone(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml — "time and timezone are independently optional"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event, _, submitter := newSubmission("MODELS2026", "ana@example.com")
+	deadlineTime := "23:59"
+	deadlineTimezone := "AoE"
+	deadlines := []model.Deadline{
+		{
+			Type:        model.DeadlineTypePaper,
+			Description: "Research track full paper",
+			Date:        time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC),
+			Time:        &deadlineTime,
+			Timezone:    &deadlineTimezone,
+			IsActive:    true,
+		},
+	}
+
+	got, err := repo.Submit(context.Background(), event, deadlines, submitter)
+
+	require.NoError(t, err)
+	require.Len(t, got.Deadlines, 1)
+	require.NotNil(t, got.Deadlines[0].Time)
+	require.NotNil(t, got.Deadlines[0].Timezone)
+	assert.Equal(t, "23:59", *got.Deadlines[0].Time)
+	assert.Equal(t, "AoE", *got.Deadlines[0].Timezone)
+}
+
+func TestEventRepository_Submit_PersistsDeadlineWithNilTimeAndTimezone(t *testing.T) {
+	// Spec: deadlines-add-time-timezone.yaml border_case "time and timezone both omitted → both null in response"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event, _, submitter := newSubmission("MODELS2026", "ana@example.com")
+	deadlines := []model.Deadline{
+		{Type: model.DeadlineTypePaper, Description: "Research track full paper", Date: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC), IsActive: true},
+	}
+
+	got, err := repo.Submit(context.Background(), event, deadlines, submitter)
+
+	require.NoError(t, err)
+	require.Len(t, got.Deadlines, 1)
+	assert.Nil(t, got.Deadlines[0].Time)
+	assert.Nil(t, got.Deadlines[0].Timezone)
+}
+
 func TestEventRepository_Submit_NoDeadlinesWhenNoneProvided(t *testing.T) {
 	// Spec: events-submit.yaml border_case "deadlines omitted or empty array → allowed, event created with no deadlines"
 	tx, rollback := beginTx(t)

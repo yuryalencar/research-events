@@ -1,0 +1,101 @@
+domain_operation: Add optional time + timezone fields to Deadline
+
+description: >
+  Adds optional time-of-day precision to deadlines. Many CFP deadlines are
+  "23:59 AoE", not just a date — this adds a `time` (HH:MM, 24h) and a
+  `timezone` (free string, e.g. "AoE", "UTC-3") field to Deadline, both
+  nullable. Existing date-only deadlines remain valid with both fields null.
+  This is a prerequisite for the upcoming deadline-supersede endpoint, but
+  applies to every endpoint that accepts or returns deadlines.
+
+migration:
+  - ALTER TABLE deadlines ADD COLUMN time VARCHAR(5)       -- nullable, "HH:MM" 24h
+  - ALTER TABLE deadlines ADD COLUMN timezone VARCHAR(50)  -- nullable, free string
+  - Existing rows get time=NULL, timezone=NULL
+
+model_changes:
+  internal/model/deadline.go:
+    - "Time *string"
+    - "Timezone *string"
+
+affected_endpoints:
+  - POST /api/v1/events/submit (specs/backend/events-submit.yaml)
+      request: DeadlineInput gains optional time, timezone
+      response: deadlineResponse gains "time": string|null, "timezone": string|null
+  - POST /api/v1/events/{id}/deadlines (specs/backend/events-deadlines-add.yaml)
+      request: DeadlineInput gains optional time, timezone
+      response: deadlineResponse gains "time": string|null, "timezone": string|null
+  - GET /api/v1/events (specs/backend/events-list.yaml)
+      response: deadlineResponse gains "time": string|null, "timezone": string|null
+  - PATCH /api/v1/events/{eventId}/deadlines/{deadlineId}/cancel (specs/backend/events-deadlines-cancel.yaml)
+      response: deadlineResponse gains "time": string|null, "timezone": string|null (reload only — no request change)
+
+request:
+  body:
+    # New optional fields on each entry of DeadlineInput (submit + add-deadlines)
+    time: string, optional, "HH:MM" 24h (e.g. "23:59")
+    timezone: string, optional, non-empty free string (e.g. "AoE", "UTC-3")
+
+responses:
+  # No new status codes — existing 200/201/400/etc. from each affected endpoint
+  # are unchanged. The only change is two new nullable fields on every
+  # deadlineResponse entry.
+  200_or_201:
+    description: deadlineResponse entries now include time and timezone
+    body:
+      deadlines:
+        - id: number
+          type: string
+          description: string
+          date: string
+          time: string | null
+          timezone: string | null
+          is_optional: boolean
+          is_active: boolean
+  400:
+    description: Validation error — invalid time format or empty timezone string
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: "deadlines[<i>].time must be in HH:MM 24-hour format" | "deadlines[<i>].timezone must not be empty"
+
+rules:
+  - time, if provided, must match HH:MM 24-hour format (00-23 : 00-59), zero-padded
+  - timezone, if provided (non-omitted), must be a non-empty string
+  - time and timezone are independently optional — no "both or neither" rule;
+    a deadline may have time without timezone or vice versa
+  - Behavior is uniform across all deadline types (abstract, paper,
+    notification, camera_ready, other) — no type-specific rules
+  - Pre-existing rows (created before this migration) have time=null,
+    timezone=null in all responses
+
+permissions:
+  - No permission changes — this only adds fields to existing public endpoints'
+    request/response shapes. Same permission model as each affected endpoint.
+
+border_cases:
+  - time and timezone both omitted → both null in response (current behavior, unchanged)
+  - only time provided, timezone omitted → valid, timezone null in response
+  - only timezone provided, time omitted → valid, time null in response
+  - time = "9:00" (not zero-padded) → 400 VALIDATION_ERROR
+  - time = "24:00" → 400 VALIDATION_ERROR
+  - time = "23:60" → 400 VALIDATION_ERROR
+  - timezone = "" (explicit empty string) → 400 VALIDATION_ERROR
+  - pre-migration rows returned by GET /api/v1/events or any reload → time and
+    timezone both null
+
+definition_of_done:
+  - Migration adds nullable time (varchar(5)) and timezone (varchar(50))
+    columns to deadlines; existing rows unaffected
+  - model.Deadline has Time *string, Timezone *string
+  - service.DeadlineInput has Time *string, Timezone *string
+  - validateDeadlineInput validates time format (HH:MM, 00-23:00-59) when provided
+  - validateDeadlineInput rejects an explicit empty-string timezone when provided
+  - BuildDeadlinesFromInput maps Time/Timezone through unchanged (immutability)
+  - deadlineResponse includes "time" and "timezone" (null when not set) in
+    toEventResponse and toEventListItemResponse
+  - POST /api/v1/events/submit accepts and returns time/timezone per deadline
+  - POST /api/v1/events/{id}/deadlines accepts and returns time/timezone per deadline
+  - GET /api/v1/events returns time/timezone for each deadline
+  - PATCH .../cancel's reloaded event returns time/timezone for each deadline
+  - All border cases above have a corresponding test case

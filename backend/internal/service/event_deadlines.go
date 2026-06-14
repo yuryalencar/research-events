@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/yuryalencar/research-events/internal/model"
@@ -34,7 +35,14 @@ type DeadlineInput struct {
 	Type        string
 	Description string
 	Date        time.Time
-	IsOptional  bool
+
+	// Time and Timezone are independently optional — see
+	// specs/backend/deadlines-add-time-timezone.yaml. Time uses 24h "HH:MM"
+	// (e.g. "23:59"); Timezone is a free string (e.g. "AoE", "UTC-3").
+	Time     *string
+	Timezone *string
+
+	IsOptional bool
 }
 
 // --- Package-level validation data ---
@@ -48,6 +56,11 @@ var allowedDeadlineTypes = map[string]bool{
 	"camera_ready": true,
 	"other":        true,
 }
+
+// deadlineTimePattern matches a 24-hour, zero-padded "HH:MM" string
+// (00:00-23:59), per specs/backend/deadlines-add-time-timezone.yaml rule
+// "time, if provided, must match HH:MM 24-hour format (00-23 : 00-59), zero-padded".
+var deadlineTimePattern = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // --- Public functions ---
 
@@ -63,6 +76,8 @@ func BuildDeadlinesFromInput(input []DeadlineInput) []model.Deadline {
 			Type:        model.DeadlineType(d.Type),
 			Description: d.Description,
 			Date:        d.Date,
+			Time:        d.Time,
+			Timezone:    d.Timezone,
 			IsOptional:  d.IsOptional,
 			IsActive:    true,
 		})
@@ -156,6 +171,12 @@ func validateDeadlineInput(d DeadlineInput) error {
 	}
 	if d.Date.IsZero() {
 		return fmt.Errorf("date is required")
+	}
+	if d.Time != nil && !deadlineTimePattern.MatchString(*d.Time) {
+		return fmt.Errorf("time must be in HH:MM 24-hour format")
+	}
+	if d.Timezone != nil && *d.Timezone == "" {
+		return fmt.Errorf("timezone must not be empty")
 	}
 	return nil
 }
