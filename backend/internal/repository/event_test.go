@@ -634,6 +634,39 @@ func TestEventRepository_ListEvents_OnlyIncludesActiveDeadlines(t *testing.T) {
 	assert.True(t, got[0].Deadlines[0].IsActive)
 }
 
+func TestEventRepository_ListEvents_IncludesSupersededDeadlinesAlongsideActive(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml rule "preloadEventAssociations
+	// changes from `is_active = true` to `is_active = true OR
+	// superseded_by_id IS NOT NULL`, so reload responses (this endpoint, GET
+	// /api/v1/events, add-deadlines, cancel) include superseded deadlines
+	// alongside active ones"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	user := mustCreateUser(t, tx, "ana@example.com")
+
+	event := baseListEvent("SUPERSEDE2026", user.ID)
+	supersededByID := uint(0) // placeholder, set below once the new row's ID is known
+	event.Deadlines = []model.Deadline{
+		{Type: model.DeadlineTypePaper, Description: "Old paper deadline", Date: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID},
+		{Type: model.DeadlineTypePaper, Description: "New paper deadline", Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID},
+	}
+	require.NoError(t, tx.Create(&event).Error)
+
+	supersededByID = event.Deadlines[1].ID
+	require.NoError(t, tx.Model(&event.Deadlines[0]).Updates(map[string]any{"is_active": false, "superseded_by_id": supersededByID}).Error)
+
+	repo := repository.NewEventRepository(tx)
+
+	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
+		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Len(t, got[0].Deadlines, 2)
+}
+
 // --- Submit ---
 
 // newSubmission returns a fresh (unsaved) Event, its Deadlines, and Submitter,

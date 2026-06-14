@@ -82,6 +82,11 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	mux.Handle("PATCH /api/v1/events/{eventId}/deadlines/{deadlineId}/cancel",
 		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.CancelDeadline)))
 
+	// Public deadline supersession on an approved event — no auth, rate-limited
+	// per events-deadlines-supersede.yaml.
+	mux.Handle("POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede",
+		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.Supersede)))
+
 	// Admin-only endpoints — RequireAuth then RequireRole("admin").
 	mux.Handle("PATCH /api/v1/admin/users/{id}/unlock",
 		authMiddleware.RequireAuth(

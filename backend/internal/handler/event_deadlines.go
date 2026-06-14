@@ -26,6 +26,15 @@ type cancelDeadlineRequest struct {
 	Submitter submitterRequest `json:"submitter"`
 }
 
+// supersedeDeadlineRequest is the JSON body for
+// POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede.
+type supersedeDeadlineRequest struct {
+	Submitter submitterRequest `json:"submitter"`
+	Date      string           `json:"date"`
+	Time      *string          `json:"time,omitempty"`
+	Timezone  *string          `json:"timezone,omitempty"`
+}
+
 // --- Public methods ---
 
 // AddDeadlines handles POST /api/v1/events/{id}/deadlines.
@@ -153,6 +162,81 @@ func (h *EventHandler) CancelDeadline(w http.ResponseWriter, r *http.Request) {
 	writeSuccess(w, http.StatusOK, "DEADLINE_CANCELLED", toEventListItemResponse(updated))
 }
 
+// Supersede handles POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede.
+// Public endpoint — no authentication required. Per
+// specs/backend/events-deadlines-supersede.yaml, any contributor can replace
+// an active deadline on an already-approved event with a new one carrying an
+// updated date (and optionally time/timezone).
+func (h *EventHandler) Supersede(w http.ResponseWriter, r *http.Request) {
+	// A non-numeric :eventId is reported as 404 EVENT_NOT_FOUND, same as a
+	// missing event — the spec requires never revealing whether IDs are numeric.
+	eventID64, err := strconv.ParseUint(r.PathValue("eventId"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "EVENT_NOT_FOUND", "event not found")
+		return
+	}
+	eventID := uint(eventID64)
+
+	var req supersedeDeadlineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+
+	input, err := toSupersedeDeadlineInput(req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	if err := service.ValidateSupersedeDeadlineInput(input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	event, ok := h.findApprovedEvent(w, r, eventID, "Supersede")
+	if !ok {
+		return
+	}
+
+	// A non-numeric :deadlineId is reported as 404 DEADLINE_NOT_FOUND, checked
+	// after the event lookup so a bad eventId is always reported first.
+	deadlineID64, err := strconv.ParseUint(r.PathValue("deadlineId"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "DEADLINE_NOT_FOUND", "deadline not found")
+		return
+	}
+	deadlineID := uint(deadlineID64)
+
+	deadline, err := h.eventRepo.FindDeadlineByID(r.Context(), eventID, deadlineID)
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "DEADLINE_NOT_FOUND", "deadline not found")
+		return
+	case err != nil:
+		h.logger.Error("failed to fetch deadline for Supersede", "event_id", eventID, "deadline_id", deadlineID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	if err := service.ValidateDeadlineCancellable(deadline); err != nil {
+		writeError(w, http.StatusConflict, "DEADLINE_ALREADY_INACTIVE", err.Error())
+		return
+	}
+
+	newDeadline := service.BuildSupersedingDeadline(deadline, input)
+	submitter := service.BuildSubmitterFromInput(input.Submitter)
+
+	updated, err := h.eventRepo.SupersedeDeadline(r.Context(), event, deadline, newDeadline, submitter)
+	if err != nil {
+		h.logger.Error("failed to supersede deadline", "event_id", eventID, "deadline_id", deadlineID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, "DEADLINE_SUPERSEDED", toEventListItemResponse(updated))
+}
+
 // --- Private functions ---
 
 // findApprovedEvent fetches the event with eventID and writes the appropriate
@@ -197,6 +281,26 @@ func toAddDeadlinesInput(eventID uint, req addDeadlinesRequest) (service.AddDead
 			Email: req.Submitter.Email,
 		},
 		Deadlines: deadlines,
+	}, nil
+}
+
+// toSupersedeDeadlineInput maps the JSON request into
+// service.SupersedeDeadlineInput, parsing the date string. Returns an error
+// if the date is malformed.
+func toSupersedeDeadlineInput(req supersedeDeadlineRequest) (service.SupersedeDeadlineInput, error) {
+	date, err := time.Parse(dateLayout, req.Date)
+	if err != nil {
+		return service.SupersedeDeadlineInput{}, errors.New("date must be a valid date (YYYY-MM-DD)")
+	}
+
+	return service.SupersedeDeadlineInput{
+		Submitter: service.SubmitterInput{
+			Name:  req.Submitter.Name,
+			Email: req.Submitter.Email,
+		},
+		Date:     date,
+		Time:     req.Time,
+		Timezone: req.Timezone,
 	}, nil
 }
 

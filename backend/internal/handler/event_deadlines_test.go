@@ -717,3 +717,366 @@ func TestEventHandler_AddDeadlines_ReturnsValidationErrorForMalformedJSON(t *tes
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
 }
+
+// --- Supersede ---
+// Spec: specs/backend/events-deadlines-supersede.yaml
+
+// validSupersedeDeadlineBody returns a JSON body that passes every validation rule.
+func validSupersedeDeadlineBody() map[string]any {
+	return map[string]any{
+		"submitter": map[string]any{
+			"name":  "Carlos Souza",
+			"email": "carlos@example.com",
+		},
+		"date": "2026-11-01",
+	}
+}
+
+func supersedeDeadlineReq(t *testing.T, eventID, deadlineID string, body any) *http.Request {
+	t.Helper()
+	var raw []byte
+	switch v := body.(type) {
+	case []byte:
+		raw = v
+	default:
+		var err error
+		raw, err = json.Marshal(body)
+		require.NoError(t, err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events/"+eventID+"/deadlines/"+deadlineID+"/supersede", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("eventId", eventID)
+	req.SetPathValue("deadlineId", deadlineID)
+	return req
+}
+
+func TestEventHandler_Supersede_ReturnsUpdatedEventWithNewAndSupersededDeadlines(t *testing.T) {
+	// Spec: responses.200 — "deadlines now includes the new deadline
+	// (is_active=true) AND the just-superseded one (is_active=false,
+	// superseded_by_id=<new id>)"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(10)).Return(activeDeadline(10, 1), nil)
+	repo.EXPECT().SupersedeDeadline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, event model.Event, oldDeadline, newDeadline model.Deadline, submitter model.User) (model.Event, error) {
+			newID := uint(11)
+			oldID := oldDeadline.ID
+			event.Deadlines = []model.Deadline{
+				{Model: gorm.Model{ID: oldID}, EventID: 1, Type: oldDeadline.Type, IsActive: false, SupersededByID: &newID},
+				{Model: gorm.Model{ID: newID}, EventID: 1, Type: newDeadline.Type, IsActive: true},
+			}
+			event.LastUpdatedBy = model.User{Name: submitter.Name, Email: submitter.Email, Role: model.UserRoleContributor}
+			return event, nil
+		})
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Data struct {
+			Deadlines []struct {
+				ID             uint  `json:"id"`
+				IsActive       bool  `json:"is_active"`
+				SupersededByID *uint `json:"superseded_by_id"`
+			} `json:"deadlines"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Len(t, resp.Data.Deadlines, 2)
+
+	old := resp.Data.Deadlines[0]
+	assert.Equal(t, uint(10), old.ID)
+	assert.False(t, old.IsActive)
+	require.NotNil(t, old.SupersededByID)
+	assert.Equal(t, uint(11), *old.SupersededByID)
+
+	newD := resp.Data.Deadlines[1]
+	assert.Equal(t, uint(11), newD.ID)
+	assert.True(t, newD.IsActive)
+	assert.Nil(t, newD.SupersededByID)
+}
+
+func TestEventHandler_Supersede_ReturnsNotFoundForNonNumericEventID(t *testing.T) {
+	// Spec: border_case "eventId is non-numeric → 404 EVENT_NOT_FOUND"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "abc", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "EVENT_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsNotFoundWhenEventDoesNotExist(t *testing.T) {
+	// Spec: border_case "event does not exist → 404 EVENT_NOT_FOUND"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(999)).Return(model.Event{}, repository.ErrNotFound)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "999", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "EVENT_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsConflictWhenEventIsPending(t *testing.T) {
+	// Spec: border_case "event exists but status != approved → 409 EVENT_NOT_APPROVED"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	event := approvedEvent(3)
+	event.Status = model.EventStatusPending
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(3)).Return(event, nil)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "3", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "EVENT_NOT_APPROVED", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsNotFoundForNonNumericDeadlineID(t *testing.T) {
+	// Spec: border_case "deadlineId is non-numeric → 404 DEADLINE_NOT_FOUND
+	// (checked after the event lookup, mirroring cancel)"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "abc", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "DEADLINE_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsNotFoundWhenDeadlineDoesNotExist(t *testing.T) {
+	// Spec: border_case "deadline does not exist → 404 DEADLINE_NOT_FOUND"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(999)).Return(model.Deadline{}, repository.ErrNotFound)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "999", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "DEADLINE_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsNotFoundWhenDeadlineBelongsToDifferentEvent(t *testing.T) {
+	// Spec: border_case "deadline belongs to a different event → 404
+	// DEADLINE_NOT_FOUND (never reveal which event a deadline belongs to)"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(10)).Return(model.Deadline{}, repository.ErrNotFound)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "DEADLINE_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsConflictWhenDeadlineAlreadyInactive(t *testing.T) {
+	// Spec: border_case "deadline is already is_active=false (cancelled OR
+	// previously superseded) → 409 DEADLINE_ALREADY_INACTIVE"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	deadline := activeDeadline(10, 1)
+	deadline.IsActive = false
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(10)).Return(deadline, nil)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", validSupersedeDeadlineBody()))
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "DEADLINE_ALREADY_INACTIVE", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForMissingSubmitterName(t *testing.T) {
+	// Spec: border_case "missing/empty submitter.name or invalid
+	// submitter.email → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["submitter"] = map[string]any{"name": "", "email": "carlos@example.com"}
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForInvalidSubmitterEmail(t *testing.T) {
+	// Spec: border_case "missing/empty submitter.name or invalid
+	// submitter.email → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["submitter"] = map[string]any{"name": "Carlos Souza", "email": "not-an-email"}
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForMissingDate(t *testing.T) {
+	// Spec: border_case "date missing or unparsable → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["date"] = ""
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForUnparsableDate(t *testing.T) {
+	// Spec: border_case "date missing or unparsable → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["date"] = "01/11/2026"
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForInvalidTimeFormat(t *testing.T) {
+	// Spec: border_case `time = "9:00" / "24:00" / "23:60" → 400 VALIDATION_ERROR`
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["time"] = "24:00"
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForEmptyTimezone(t *testing.T) {
+	// Spec: border_case `timezone = "" (explicit empty string) → 400 VALIDATION_ERROR`
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["timezone"] = ""
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_ReturnsValidationErrorForMalformedJSON(t *testing.T) {
+	// Spec: border_case "malformed JSON body → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", []byte("{not json")))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestEventHandler_Supersede_AcceptsSameOrEarlierDate(t *testing.T) {
+	// Spec: border_cases "new date equals the old date → allowed" and "new
+	// date is earlier than the old date → allowed (no rule prevents this)"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockEventRepository(ctrl)
+	repo.EXPECT().FindByID(gomock.Any(), uint(1)).Return(approvedEvent(1), nil)
+	repo.EXPECT().FindDeadlineByID(gomock.Any(), uint(1), uint(10)).Return(activeDeadline(10, 1), nil)
+	repo.EXPECT().SupersedeDeadline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(approvedEvent(1), nil)
+
+	h := handler.NewEventHandler(repo, testLogger)
+	body := validSupersedeDeadlineBody()
+	body["date"] = "2020-01-01" // earlier than any reasonable old deadline date
+	rec := httptest.NewRecorder()
+
+	h.Supersede(rec, supersedeDeadlineReq(t, "1", "10", body))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}

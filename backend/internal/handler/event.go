@@ -232,14 +232,15 @@ type userResponse struct {
 
 // deadlineResponse is one entry in the event response's deadlines array.
 type deadlineResponse struct {
-	ID          uint    `json:"id"`
-	Type        string  `json:"type"`
-	Description string  `json:"description"`
-	Date        string  `json:"date"`
-	Time        *string `json:"time"`
-	Timezone    *string `json:"timezone"`
-	IsOptional  bool    `json:"is_optional"`
-	IsActive    bool    `json:"is_active"`
+	ID             uint    `json:"id"`
+	Type           string  `json:"type"`
+	Description    string  `json:"description"`
+	Date           string  `json:"date"`
+	Time           *string `json:"time"`
+	Timezone       *string `json:"timezone"`
+	IsOptional     bool    `json:"is_optional"`
+	IsActive       bool    `json:"is_active"`
+	SupersededByID *uint   `json:"superseded_by_id"`
 }
 
 // eventResponse is the "data" payload for a successful submission, per
@@ -295,14 +296,15 @@ func toDeadlineResponses(deadlines []model.Deadline) []deadlineResponse {
 	out := make([]deadlineResponse, 0, len(deadlines))
 	for _, d := range deadlines {
 		out = append(out, deadlineResponse{
-			ID:          d.ID,
-			Type:        string(d.Type),
-			Description: d.Description,
-			Date:        d.Date.Format(dateLayout),
-			Time:        d.Time,
-			Timezone:    d.Timezone,
-			IsOptional:  d.IsOptional,
-			IsActive:    d.IsActive,
+			ID:             d.ID,
+			Type:           string(d.Type),
+			Description:    d.Description,
+			Date:           d.Date.Format(dateLayout),
+			Time:           d.Time,
+			Timezone:       d.Timezone,
+			IsOptional:     d.IsOptional,
+			IsActive:       d.IsActive,
+			SupersededByID: d.SupersededByID,
 		})
 	}
 	return out

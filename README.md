@@ -170,6 +170,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-14 | [Add Deadlines to an Approved Event](ai-sessions/2026-06-14-event-deadlines-add-feature.md) | `POST /api/v1/events/{id}/deadlines` — public, lets any contributor add one or more deadlines to an approved event. Single vs. batch audit actions, `batch_deadlines_added` migration, shared 50 req/min rate limiter. 242 tests. |
 | 2026-06-14 | [Cancel a Deadline](ai-sessions/2026-06-14-event-deadlines-cancel-feature.md) | `PATCH /api/v1/events/{eventId}/deadlines/{deadlineId}/cancel` — public, lets any contributor cancel an active deadline (`is_active=false`, `superseded_by_id=NULL`). New `deadline_cancelled` audit action + migration, shared 50 req/min rate limiter. 272 tests. |
 | 2026-06-14 | [Deadlines: time + timezone fields](ai-sessions/2026-06-14-deadlines-time-timezone-feature.md) | Cross-cutting prerequisite for deadline supersession — adds optional `time` (HH:MM) and `timezone` (free string) to `Deadline`, returned/accepted by submit, add-deadlines, list, and cancel-reload. New migration 009. 287 tests. |
+| 2026-06-14 | [Supersede a Deadline](ai-sessions/2026-06-14-event-deadlines-supersede-feature.md) | `POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede` — public, lets any contributor replace an active deadline with a new date/time/timezone; old row marked `is_active=false, superseded_by_id=<new id>`, new `superseded_by_id` field on every deadline response. Shared 50 req/min rate limiter. 322 tests. |
 
 ## Specs
 
@@ -187,6 +188,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Events: Add Deadlines | [events-deadlines-add.yaml](specs/backend/events-deadlines-add.yaml) | Done |
 | Events: Cancel a Deadline | [events-deadlines-cancel.yaml](specs/backend/events-deadlines-cancel.yaml) | Done |
 | Deadlines: time + timezone fields | [deadlines-add-time-timezone.yaml](specs/backend/deadlines-add-time-timezone.yaml) | Done |
+| Events: Supersede a Deadline | [events-deadlines-supersede.yaml](specs/backend/events-deadlines-supersede.yaml) | Done |
 
 ---
 

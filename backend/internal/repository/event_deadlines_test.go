@@ -4,6 +4,7 @@ package repository_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -498,6 +499,211 @@ func TestEventRepository_CancelDeadline_AllowsCancellingLastActiveDeadline_Retur
 
 	require.NoError(t, err)
 	assert.Empty(t, got.Deadlines)
+}
+
+// --- SupersedeDeadline ---
+// Spec: specs/backend/events-deadlines-supersede.yaml
+
+// newSupersedingDeadline returns the new model.Deadline to pass into
+// SupersedeDeadline, with the requested date/time/timezone — mirroring what
+// service.BuildSupersedingDeadline would produce from old (inheriting
+// Type/Description/IsOptional) and the request's date/time/timezone.
+func newSupersedingDeadline(old model.Deadline, date time.Time, deadlineTime, timezone *string) model.Deadline {
+	return model.Deadline{
+		Type:        old.Type,
+		Description: old.Description,
+		Date:        date,
+		Time:        deadlineTime,
+		Timezone:    timezone,
+		IsOptional:  old.IsOptional,
+		IsActive:    true,
+	}
+}
+
+func TestEventRepository_SupersedeDeadline_CreatesNewActiveDeadlineWithRequestedFields(t *testing.T) {
+	// Spec: rule "The new row is created with is_active=true and
+	// superseded_by_id=null"; rule "only date, time, and timezone come from
+	// the request body"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newTime := "23:59"
+	newTimezone := "AoE"
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, &newTime, &newTimezone)
+
+	got, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	var saved model.Deadline
+	require.NoError(t, tx.Where("event_id = ? AND id != ?", event.ID, old.ID).First(&saved).Error)
+	assert.True(t, saved.IsActive)
+	assert.Nil(t, saved.SupersededByID)
+	assert.True(t, newDate.Equal(saved.Date))
+	require.NotNil(t, saved.Time)
+	assert.Equal(t, "23:59", *saved.Time)
+	require.NotNil(t, saved.Timezone)
+	assert.Equal(t, "AoE", *saved.Timezone)
+	assert.Equal(t, old.Type, saved.Type)
+	assert.Equal(t, old.Description, saved.Description)
+	assert.NotEmpty(t, got.Deadlines)
+}
+
+func TestEventRepository_SupersedeDeadline_MarksOldDeadlineInactiveWithSupersededByID(t *testing.T) {
+	// Spec: rule "The old row is updated: is_active=false,
+	// superseded_by_id=<new row's ID>"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, nil, nil)
+
+	_, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	var savedOld model.Deadline
+	require.NoError(t, tx.First(&savedOld, old.ID).Error)
+	assert.False(t, savedOld.IsActive)
+	require.NotNil(t, savedOld.SupersededByID)
+
+	var savedNew model.Deadline
+	require.NoError(t, tx.Where("event_id = ? AND id != ?", event.ID, old.ID).First(&savedNew).Error)
+	assert.Equal(t, savedNew.ID, *savedOld.SupersededByID)
+}
+
+func TestEventRepository_SupersedeDeadline_UpdatesLastUpdatedByID(t *testing.T) {
+	// Spec: mirrors events-deadlines-cancel.yaml's "event.last_updated_by_id is
+	// set to the submitter's user ID"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	originalLastUpdatedByID := withDeadline.LastUpdatedByID
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, nil, nil)
+
+	got, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, originalLastUpdatedByID, got.LastUpdatedByID)
+	assert.Equal(t, got.LastUpdatedByID, got.LastUpdatedBy.ID)
+	assert.Equal(t, "Carlos Souza", got.LastUpdatedBy.Name)
+}
+
+func TestEventRepository_SupersedeDeadline_WritesDeadlineSupersededAuditLog(t *testing.T) {
+	// Spec: rule "AuditLog: one deadline_superseded row (entity_type=deadline,
+	// entity_id=<old deadline ID>) whose diff records before/after for date,
+	// time, timezone, is_active, and superseded_by_id"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, nil, nil)
+
+	got, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	var supersededLog model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityDeadline, old.ID, model.AuditActionDeadlineSuperseded).First(&supersededLog).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, supersededLog.ChangedByID)
+
+	var diff map[string]any
+	require.NoError(t, json.Unmarshal(supersededLog.Diff, &diff))
+	assert.Contains(t, diff, "date")
+	assert.Contains(t, diff, "time")
+	assert.Contains(t, diff, "timezone")
+	assert.Contains(t, diff, "is_active")
+	assert.Contains(t, diff, "superseded_by_id")
+}
+
+func TestEventRepository_SupersedeDeadline_WritesUpdatedAuditLogForLastUpdatedByID(t *testing.T) {
+	// Spec: rule "plus the always-written updated row (entity_type=event) for
+	// the last_updated_by_id change — mirrors events-deadlines-cancel.yaml's
+	// audit pattern"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, nil, nil)
+
+	got, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	var updatedLog model.AuditLog
+	err = tx.Where("entity_type = ? AND entity_id = ? AND action = ?",
+		model.AuditEntityEvent, got.ID, model.AuditActionUpdated).Order("id DESC").First(&updatedLog).Error
+	require.NoError(t, err)
+	assert.Equal(t, got.LastUpdatedByID, updatedLog.ChangedByID)
+}
+
+func TestEventRepository_SupersedeDeadline_ReloadedEventIncludesBothOldAndNewDeadlines(t *testing.T) {
+	// Spec: rule "preloadEventAssociations changes ... so reload responses
+	// (this endpoint, ...) include superseded deadlines alongside active
+	// ones"; DoD "response deadlines include both the new active deadline and
+	// the superseded one (is_active=false, superseded_by_id=<new id>)"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewEventRepository(tx)
+	event := newApprovedEvent(t, tx, "MODELS2026", "ana@example.com")
+	withDeadline := addOneDeadline(t, tx, event)
+	old := withDeadline.Deadlines[0]
+	submitter := model.User{Name: "Carlos Souza", Email: "carlos@example.com", Role: model.UserRoleContributor}
+
+	newDate := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	newDeadline := newSupersedingDeadline(old, newDate, nil, nil)
+
+	got, err := repo.SupersedeDeadline(context.Background(), withDeadline, old, newDeadline, submitter)
+	require.NoError(t, err)
+
+	require.Len(t, got.Deadlines, 2)
+
+	var oldFound, newFound bool
+	for _, d := range got.Deadlines {
+		switch d.ID {
+		case old.ID:
+			oldFound = true
+			assert.False(t, d.IsActive)
+			require.NotNil(t, d.SupersededByID)
+		default:
+			newFound = true
+			assert.True(t, d.IsActive)
+			assert.Nil(t, d.SupersededByID)
+		}
+	}
+	assert.True(t, oldFound)
+	assert.True(t, newFound)
 }
 
 // --- audit_logs_action_check constraint (migrations/007_add_batch_deadlines_added_audit_action.sql) ---

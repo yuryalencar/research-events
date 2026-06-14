@@ -147,3 +147,18 @@ func (mr *MockEventRepositoryMockRecorder) Submit(ctx, event, deadlines, submitt
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockEventRepository)(nil).Submit), ctx, event, deadlines, submitter)
 }
+
+// SupersedeDeadline mocks base method.
+func (m *MockEventRepository) SupersedeDeadline(ctx context.Context, event model.Event, oldDeadline, newDeadline model.Deadline, submitter model.User) (model.Event, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SupersedeDeadline", ctx, event, oldDeadline, newDeadline, submitter)
+	ret0, _ := ret[0].(model.Event)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SupersedeDeadline indicates an expected call of SupersedeDeadline.
+func (mr *MockEventRepositoryMockRecorder) SupersedeDeadline(ctx, event, oldDeadline, newDeadline, submitter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SupersedeDeadline", reflect.TypeOf((*MockEventRepository)(nil).SupersedeDeadline), ctx, event, oldDeadline, newDeadline, submitter)
+}

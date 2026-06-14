@@ -62,6 +62,19 @@ type EventRepository interface {
 	// LastUpdatedByID change. Returns the event reloaded with CreatedBy/LastUpdatedBy
 	// preloaded and Deadlines containing all remaining is_active=true rows.
 	CancelDeadline(ctx context.Context, event model.Event, deadline model.Deadline, submitter model.User) (model.Event, error)
+
+	// SupersedeDeadline replaces oldDeadline with newDeadline within a single
+	// transaction: find-or-create submitter (same rules as Submit/AddDeadlines/
+	// CancelDeadline), insert newDeadline (is_active=true, superseded_by_id=nil),
+	// update oldDeadline (is_active=false, superseded_by_id=<newDeadline's ID>),
+	// update event.LastUpdatedByID to submitter's ID, and write a
+	// deadline_superseded AuditLog row (entity=oldDeadline, diff records
+	// before/after for date/time/timezone/is_active/superseded_by_id) plus an
+	// "updated" row for the LastUpdatedByID change. Returns the event reloaded
+	// with CreatedBy/LastUpdatedBy preloaded and Deadlines containing every
+	// is_active=true row plus any is_active=false row that has
+	// superseded_by_id set (i.e. oldDeadline and newDeadline both appear).
+	SupersedeDeadline(ctx context.Context, event model.Event, oldDeadline model.Deadline, newDeadline model.Deadline, submitter model.User) (model.Event, error)
 }
 
 // ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring
@@ -212,14 +225,19 @@ func applyListEventsFilters(db *gorm.DB, filter ListEventsFilter) *gorm.DB {
 	return db
 }
 
-// preloadEventAssociations adds the CreatedBy/LastUpdatedBy/active-Deadlines
+// preloadEventAssociations adds the CreatedBy/LastUpdatedBy/Deadlines
 // preloads shared by every query that returns a full Event to the API —
-// ListEvents and AddDeadlines's reload both build on this.
+// ListEvents, AddDeadlines's reload, CancelDeadline's reload, and
+// SupersedeDeadline's reload all build on this. Deadlines includes every
+// is_active=true row plus any is_active=false row that has
+// superseded_by_id set, so a just-superseded deadline is returned alongside
+// its replacement (per events-deadlines-supersede.yaml) while a plain
+// cancelled deadline (is_active=false, superseded_by_id=NULL) stays hidden.
 func preloadEventAssociations(db *gorm.DB) *gorm.DB {
 	return db.
 		Preload("CreatedBy").
 		Preload("LastUpdatedBy").
-		Preload("Deadlines", "is_active = ?", true)
+		Preload("Deadlines", "is_active = ? OR superseded_by_id IS NOT NULL", true)
 }
 
 // findOrCreateSubmitter looks up a User by email within tx. If found, its name is

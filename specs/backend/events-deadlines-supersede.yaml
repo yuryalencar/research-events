@@ -1,0 +1,143 @@
+endpoint: POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede
+
+description: >
+  Lets any contributor replace an active deadline with a new one that has an
+  updated date (and optionally time/timezone) — e.g. when an event extends a
+  paper deadline because of low submission counts. The old Deadline row is
+  marked is_active=false and superseded_by_id is set to the new row's ID. The
+  new row inherits type, description, and is_optional from the old one — only
+  date, time, and timezone come from the request body. The reloaded event's
+  deadlines array includes both the new active deadline AND the just-
+  superseded one (is_active=false, superseded_by_id != null), so the frontend
+  can show "this deadline changed".
+
+request:
+  body:
+    submitter:
+      name: string (required)
+      email: string (required, valid email format)
+    date: string (required), "YYYY-MM-DD"
+    time: string (optional), "HH:MM" 24h, e.g. "23:59"
+    timezone: string (optional, non-empty if provided), e.g. "AoE", "UTC-3"
+
+responses:
+  200:
+    description: Deadline superseded — returns the full updated event
+    body:
+      data:
+        # Same shape as events-list.yaml's eventListItemResponse.
+        # deadlines now includes the new deadline (is_active=true) AND the
+        # just-superseded one (is_active=false, superseded_by_id=<new id>).
+        deadlines:
+          - id: number
+            type: string
+            description: string
+            date: string
+            time: string | null
+            timezone: string | null
+            is_optional: boolean
+            is_active: boolean
+            superseded_by_id: number | null   # NEW field on deadlineResponse
+  400:
+    description: Validation error
+    body:
+      error:
+        code: VALIDATION_ERROR
+        message: >
+          "submitter.name is required" | "submitter.email must be a valid
+          email" | "date is required" | "date must be a valid date
+          (YYYY-MM-DD)" | "time must be in HH:MM 24-hour format" |
+          "timezone must not be empty"
+  404:
+    description: Event or deadline not found
+    body:
+      error:
+        code: EVENT_NOT_FOUND | DEADLINE_NOT_FOUND
+        message: "event not found" | "deadline not found"
+  409:
+    description: Event not approved, or deadline already inactive
+    body:
+      error:
+        code: EVENT_NOT_APPROVED | DEADLINE_ALREADY_INACTIVE
+        message: "event must be approved for this operation" | "deadline is already inactive"
+  429:
+    description: Rate limit exceeded
+    body:
+      error:
+        code: RATE_LIMIT_EXCEEDED
+        message: "too many requests"
+
+rules:
+  - Public endpoint — no authentication required (mirrors events-deadlines-cancel.yaml)
+  - The new Deadline row inherits type, description, and is_optional from the
+    old row unchanged — the request body never specifies them
+  - The new Deadline row's time/timezone come ONLY from the request body — they
+    are NOT inherited from the old row. Omitting them means the new deadline
+    has time=null, timezone=null even if the old one had values.
+  - The new row is created with is_active=true and superseded_by_id=null
+  - The old row is updated: is_active=false, superseded_by_id=<new row's ID>
+  - No validation that the new date is later than the old date — any valid
+    date (past, same, or future) is accepted
+  - preloadEventAssociations changes from `is_active = true` to
+    `is_active = true OR superseded_by_id IS NOT NULL`, so reload responses
+    (this endpoint, GET /api/v1/events, add-deadlines, cancel) include
+    superseded deadlines alongside active ones
+  - deadlineResponse gains "superseded_by_id" (number | null) — null for
+    active, never-superseded deadlines
+  - AuditLog: one `deadline_superseded` row (entity_type=deadline,
+    entity_id=<old deadline ID>) whose diff records before/after for date,
+    time, timezone, is_active, and superseded_by_id; plus the always-written
+    `updated` row (entity_type=event) for the last_updated_by_id change —
+    mirrors events-deadlines-cancel.yaml's audit pattern
+  - Shared 50 req/min publicRateLimiter with /events/submit,
+    /events/{id}/deadlines, and the cancel endpoint
+
+permissions:
+  - Public — any contributor (no auth) may supersede a deadline on an
+    approved event, same as cancel
+
+border_cases:
+  - eventId is non-numeric → 404 EVENT_NOT_FOUND
+  - deadlineId is non-numeric → 404 DEADLINE_NOT_FOUND (checked after the
+    event lookup, mirroring cancel)
+  - event does not exist → 404 EVENT_NOT_FOUND
+  - event exists but status != approved → 409 EVENT_NOT_APPROVED
+  - deadline does not exist → 404 DEADLINE_NOT_FOUND
+  - deadline belongs to a different event → 404 DEADLINE_NOT_FOUND (never
+    reveal which event a deadline belongs to)
+  - deadline is already is_active=false (cancelled OR previously superseded)
+    → 409 DEADLINE_ALREADY_INACTIVE
+  - new date equals the old date → allowed, still creates a new row and
+    supersedes the old one
+  - new date is earlier than the old date → allowed (no rule prevents this)
+  - only date provided (time/timezone omitted) → new row has time=null,
+    timezone=null regardless of the old row's values
+  - old row had time/timezone set, new row omits them → new row's
+    time/timezone are null (not inherited)
+  - malformed JSON body → 400 VALIDATION_ERROR
+  - missing/empty submitter.name or invalid submitter.email → 400 VALIDATION_ERROR
+  - date missing or unparsable → 400 VALIDATION_ERROR
+  - time = "9:00" / "24:00" / "23:60" → 400 VALIDATION_ERROR
+  - timezone = "" (explicit empty string) → 400 VALIDATION_ERROR
+
+definition_of_done:
+  - 200 + updated event on success; response deadlines include both the new
+    active deadline and the superseded one (is_active=false,
+    superseded_by_id=<new id>)
+  - New deadline inherits type/description/is_optional from the old one
+  - New deadline's date/time/timezone come only from the request body
+  - Old deadline is updated: is_active=false, superseded_by_id=<new id>
+  - deadlineResponse includes "superseded_by_id" everywhere deadlines are returned
+  - preloadEventAssociations returns is_active=true OR superseded_by_id IS NOT NULL
+  - AuditLog: deadline_superseded (entity=old deadline, diff has
+    before/after for date/time/timezone/is_active/superseded_by_id) +
+    updated (entity=event, last_updated_by_id)
+  - 400 for malformed JSON, missing/invalid submitter, missing/unparsable
+    date, invalid time format, empty timezone
+  - 404 EVENT_NOT_FOUND for non-numeric/missing eventId
+  - 404 DEADLINE_NOT_FOUND for non-numeric/missing deadlineId, or a deadline
+    belonging to a different event
+  - 409 EVENT_NOT_APPROVED for pending/rejected events
+  - 409 DEADLINE_ALREADY_INACTIVE for an already-cancelled or
+    already-superseded deadline
+  - All border cases above have a corresponding test case

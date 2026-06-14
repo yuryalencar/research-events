@@ -97,11 +97,50 @@ func (r *eventRepository) CancelDeadline(ctx context.Context, event model.Event,
 	return r.findByIDWithActiveDeadlines(ctx, event.ID)
 }
 
+func (r *eventRepository) SupersedeDeadline(ctx context.Context, event model.Event, oldDeadline model.Deadline, newDeadline model.Deadline, submitter model.User) (model.Event, error) {
+	oldLastUpdatedByID := event.LastUpdatedByID
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		user, err := findOrCreateSubmitter(tx, submitter)
+		if err != nil {
+			return err
+		}
+
+		newDeadline.EventID = event.ID
+		newDeadline.CreatedByID = user.ID
+		if err := tx.Create(&newDeadline).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.Deadline{}).Where("id = ?", oldDeadline.ID).
+			Updates(map[string]any{"is_active": false, "superseded_by_id": newDeadline.ID}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.Event{}).Where("id = ?", event.ID).
+			Update("last_updated_by_id", user.ID).Error; err != nil {
+			return err
+		}
+
+		auditLogs, err := buildSupersedeDeadlineAuditLogs(event, oldDeadline, newDeadline, oldLastUpdatedByID, user.ID)
+		if err != nil {
+			return err
+		}
+		return tx.Create(&auditLogs).Error
+	})
+	if err != nil {
+		return model.Event{}, err
+	}
+
+	return r.findByIDWithActiveDeadlines(ctx, event.ID)
+}
+
 // --- Private functions ---
 
 // findByIDWithActiveDeadlines reloads an event with CreatedBy/LastUpdatedBy
-// preloaded and Deadlines containing only is_active=true rows — the shape
-// AddDeadlines returns to the handler.
+// preloaded and Deadlines containing every is_active=true row plus any
+// is_active=false row that has superseded_by_id set — the shape
+// AddDeadlines, CancelDeadline, and SupersedeDeadline return to the handler.
 func (r *eventRepository) findByIDWithActiveDeadlines(ctx context.Context, id uint) (model.Event, error) {
 	var event model.Event
 	err := preloadEventAssociations(r.db.WithContext(ctx)).First(&event, id).Error
@@ -200,4 +239,44 @@ func buildBatchDeadlinesDiff(deadlines []model.Deadline) map[string]any {
 		})
 	}
 	return map[string]any{"deadlines_added": items}
+}
+
+// buildSupersedeDeadlineAuditLogs returns the two AuditLog rows for
+// SupersedeDeadline: one deadline_superseded row for the superseded
+// Deadline (with a before/after diff of the fields that changed), and one
+// "updated" row for the event.LastUpdatedByID change.
+func buildSupersedeDeadlineAuditLogs(event model.Event, oldDeadline, newDeadline model.Deadline, oldLastUpdatedByID, newLastUpdatedByID uint) ([]model.AuditLog, error) {
+	diff, err := json.Marshal(buildDeadlineSupersedeDiff(oldDeadline, newDeadline))
+	if err != nil {
+		return nil, err
+	}
+
+	updatedLog, err := buildLastUpdatedByIDAuditLog(event.ID, oldLastUpdatedByID, newLastUpdatedByID)
+	if err != nil {
+		return nil, err
+	}
+
+	return []model.AuditLog{
+		{
+			EntityType:  model.AuditEntityDeadline,
+			EntityID:    oldDeadline.ID,
+			Action:      model.AuditActionDeadlineSuperseded,
+			ChangedByID: newLastUpdatedByID,
+			Diff:        model.JSONB(diff),
+		},
+		updatedLog,
+	}, nil
+}
+
+// buildDeadlineSupersedeDiff records the before/after values of the fields
+// that change when oldDeadline is superseded by newDeadline, per
+// events-deadlines-supersede.yaml's AuditLog rule.
+func buildDeadlineSupersedeDiff(old, newDeadline model.Deadline) map[string]any {
+	return map[string]any{
+		"date":             map[string]any{"before": old.Date, "after": newDeadline.Date},
+		"time":             map[string]any{"before": old.Time, "after": newDeadline.Time},
+		"timezone":         map[string]any{"before": old.Timezone, "after": newDeadline.Timezone},
+		"is_active":        map[string]any{"before": old.IsActive, "after": false},
+		"superseded_by_id": map[string]any{"before": old.SupersededByID, "after": newDeadline.ID},
+	}
 }

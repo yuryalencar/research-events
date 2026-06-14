@@ -390,3 +390,194 @@ func TestBuildDeadlinesFromInput_PreservesProvidedFields(t *testing.T) {
 	assert.Equal(t, date, deadlines[0].Date)
 	assert.True(t, deadlines[0].IsOptional)
 }
+
+// --- ValidateSupersedeDeadlineInput ---
+// Spec: specs/backend/events-deadlines-supersede.yaml
+
+// validSupersedeDeadlineInput returns a SupersedeDeadlineInput that passes
+// every validation rule. Each test mutates a copy of this baseline to
+// isolate the field under test.
+func validSupersedeDeadlineInput() service.SupersedeDeadlineInput {
+	return service.SupersedeDeadlineInput{
+		Submitter: service.SubmitterInput{
+			Name:  "Beatriz Costa",
+			Email: "beatriz@example.com",
+		},
+		Date: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestValidateSupersedeDeadlineInput_ValidInput_ReturnsNil(t *testing.T) {
+	err := service.ValidateSupersedeDeadlineInput(validSupersedeDeadlineInput())
+
+	require.NoError(t, err)
+}
+
+func TestValidateSupersedeDeadlineInput_MissingSubmitterName_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case "missing/empty
+	// submitter.name or invalid submitter.email → 400 VALIDATION_ERROR"
+	input := validSupersedeDeadlineInput()
+	input.Submitter.Name = ""
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "submitter.name")
+}
+
+func TestValidateSupersedeDeadlineInput_InvalidSubmitterEmail_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case "missing/empty
+	// submitter.name or invalid submitter.email → 400 VALIDATION_ERROR"
+	input := validSupersedeDeadlineInput()
+	input.Submitter.Email = "not-an-email"
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "submitter.email")
+}
+
+func TestValidateSupersedeDeadlineInput_MissingDate_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case "date missing or
+	// unparsable → 400 VALIDATION_ERROR"
+	input := validSupersedeDeadlineInput()
+	input.Date = time.Time{}
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "date")
+}
+
+func TestValidateSupersedeDeadlineInput_InvalidTimeFormat_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case `time = "9:00" /
+	// "24:00" / "23:60" → 400 VALIDATION_ERROR`
+	deadlineTime := "9:00"
+	input := validSupersedeDeadlineInput()
+	input.Time = &deadlineTime
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "time")
+}
+
+func TestValidateSupersedeDeadlineInput_EmptyTimezone_ReturnsError(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case `timezone = ""
+	// (explicit empty string) → 400 VALIDATION_ERROR`
+	deadlineTimezone := ""
+	input := validSupersedeDeadlineInput()
+	input.Timezone = &deadlineTimezone
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timezone")
+}
+
+func TestValidateSupersedeDeadlineInput_TimeAndTimezoneOmitted_ReturnsNil(t *testing.T) {
+	// Spec: events-deadlines-supersede.yaml border_case "only date provided
+	// (time/timezone omitted) → new row has time=null, timezone=null"
+	input := validSupersedeDeadlineInput()
+	input.Time = nil
+	input.Timezone = nil
+
+	err := service.ValidateSupersedeDeadlineInput(input)
+
+	require.NoError(t, err)
+}
+
+func TestValidateSupersedeDeadlineInput_SameInputTwice_ReturnsIdenticalResult(t *testing.T) {
+	// FP: pure function — same input always produces the same output, no hidden state.
+	input := validSupersedeDeadlineInput()
+
+	err1 := service.ValidateSupersedeDeadlineInput(input)
+	err2 := service.ValidateSupersedeDeadlineInput(input)
+
+	assert.Equal(t, err1, err2)
+}
+
+// --- BuildSupersedingDeadline ---
+// Spec: specs/backend/events-deadlines-supersede.yaml
+
+func TestBuildSupersedingDeadline_InheritsTypeDescriptionIsOptionalFromOld(t *testing.T) {
+	// Spec: rule "The new Deadline row inherits type, description, and
+	// is_optional from the old row unchanged — the request body never
+	// specifies them"
+	old := model.Deadline{
+		Type:        model.DeadlineTypePaper,
+		Description: "Research track full paper",
+		IsOptional:  true,
+	}
+	input := validSupersedeDeadlineInput()
+
+	newDeadline := service.BuildSupersedingDeadline(old, input)
+
+	assert.Equal(t, old.Type, newDeadline.Type)
+	assert.Equal(t, old.Description, newDeadline.Description)
+	assert.Equal(t, old.IsOptional, newDeadline.IsOptional)
+}
+
+func TestBuildSupersedingDeadline_UsesDateTimeTimezoneFromInput(t *testing.T) {
+	// Spec: rule "only date, time, and timezone come from the request body"
+	oldTime := "10:00"
+	oldTimezone := "UTC"
+	old := model.Deadline{
+		Type:     model.DeadlineTypePaper,
+		Date:     time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC),
+		Time:     &oldTime,
+		Timezone: &oldTimezone,
+	}
+	newTime := "23:59"
+	newTimezone := "AoE"
+	input := validSupersedeDeadlineInput()
+	input.Date = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	input.Time = &newTime
+	input.Timezone = &newTimezone
+
+	newDeadline := service.BuildSupersedingDeadline(old, input)
+
+	assert.Equal(t, input.Date, newDeadline.Date)
+	require.NotNil(t, newDeadline.Time)
+	assert.Equal(t, "23:59", *newDeadline.Time)
+	require.NotNil(t, newDeadline.Timezone)
+	assert.Equal(t, "AoE", *newDeadline.Timezone)
+}
+
+func TestBuildSupersedingDeadline_OmittedTimeTimezone_ResultsInNilNotInherited(t *testing.T) {
+	// Spec: border_case "old row had time/timezone set, new row omits them →
+	// new row's time/timezone are null (not inherited)"
+	oldTime := "10:00"
+	oldTimezone := "UTC"
+	old := model.Deadline{
+		Type:     model.DeadlineTypePaper,
+		Date:     time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC),
+		Time:     &oldTime,
+		Timezone: &oldTimezone,
+	}
+	input := validSupersedeDeadlineInput()
+	input.Time = nil
+	input.Timezone = nil
+
+	newDeadline := service.BuildSupersedingDeadline(old, input)
+
+	assert.Nil(t, newDeadline.Time)
+	assert.Nil(t, newDeadline.Timezone)
+}
+
+func TestBuildSupersedingDeadline_SetsIsActiveTrueAndSupersededByIDNil(t *testing.T) {
+	// Spec: rule "The new row is created with is_active=true and
+	// superseded_by_id=null"
+	supersededBy := uint(42)
+	old := model.Deadline{
+		Type:           model.DeadlineTypePaper,
+		IsActive:       false,
+		SupersededByID: &supersededBy,
+	}
+	input := validSupersedeDeadlineInput()
+
+	newDeadline := service.BuildSupersedingDeadline(old, input)
+
+	assert.True(t, newDeadline.IsActive)
+	assert.Nil(t, newDeadline.SupersededByID)
+}

@@ -19,6 +19,20 @@ type AddDeadlinesInput struct {
 	Deadlines []DeadlineInput
 }
 
+// SupersedeDeadlineInput groups all inputs for superseding a single deadline
+// on an already-approved event, mirroring the request body defined in
+// specs/backend/events-deadlines-supersede.yaml. EventID and DeadlineID come
+// from path params, validated by repository lookups — only the request
+// body's submitter, date, time, and timezone are validated here. Per the
+// spec, time and timezone always come from the request and are never
+// inherited from the deadline being superseded.
+type SupersedeDeadlineInput struct {
+	Submitter SubmitterInput
+	Date      time.Time
+	Time      *string
+	Timezone  *string
+}
+
 // CancelDeadlineInput groups all inputs for cancelling a single deadline on an
 // already-approved event, mirroring the request body defined in
 // specs/backend/events-deadlines-cancel.yaml. EventID and DeadlineID come from
@@ -150,6 +164,54 @@ func ValidateDeadlineCancellable(d model.Deadline) error {
 		return fmt.Errorf("deadline is already inactive")
 	}
 	return nil
+}
+
+// FP: pure function
+// ValidateSupersedeDeadlineInput depends only on its argument and performs no
+// I/O — no database lookup to confirm the event/deadline exist or that the
+// deadline is still active (those checks belong to the repository layer,
+// which alone has DB access). Given the same input it always returns the
+// same error (or nil), so it is trivially testable: no mocks, no setup, just
+// input → output. The time/timezone checks reuse deadlineTimePattern and the
+// "empty timezone is invalid" rule already shared with
+// ValidateAddDeadlinesInput.
+func ValidateSupersedeDeadlineInput(input SupersedeDeadlineInput) error {
+	if err := validateSubmitterInput(input.Submitter); err != nil {
+		return err
+	}
+	if input.Date.IsZero() {
+		return fmt.Errorf("date is required")
+	}
+	if input.Time != nil && !deadlineTimePattern.MatchString(*input.Time) {
+		return fmt.Errorf("time must be in HH:MM 24-hour format")
+	}
+	if input.Timezone != nil && *input.Timezone == "" {
+		return fmt.Errorf("timezone must not be empty")
+	}
+	return nil
+}
+
+// FP: immutability
+// BuildSupersedingDeadline returns a brand new model.Deadline — it never
+// mutates old, the Deadline being replaced. Per
+// specs/backend/events-deadlines-supersede.yaml, the new row inherits Type,
+// Description, and IsOptional from old unchanged, but Date/Time/Timezone come
+// only from input (never copied from old, even if input omits them — that is
+// what keeps the "never inherit time/timezone" rule a one-way data flow
+// instead of a conditional fallback). The new row always starts
+// IsActive=true with SupersededByID=nil; the caller (repository layer) is
+// responsible for marking old as is_active=false/superseded_by_id=<new ID>
+// once the new row has been persisted and its ID is known.
+func BuildSupersedingDeadline(old model.Deadline, input SupersedeDeadlineInput) model.Deadline {
+	return model.Deadline{
+		Type:        old.Type,
+		Description: old.Description,
+		Date:        input.Date,
+		Time:        input.Time,
+		Timezone:    input.Timezone,
+		IsOptional:  old.IsOptional,
+		IsActive:    true,
+	}
 }
 
 // --- Private functions ---
