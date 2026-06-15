@@ -94,3 +94,28 @@ func TestConfig_Load_ReturnsJWTSecretFromEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "supersecret", cfg.JWTSecret)
 }
+
+// Spec: specs/backend/observability-opentelemetry.yaml
+// Rule: "SENTRY_DSN env var, optional. Empty -> no-op tracer, sentry.Init never called."
+
+func TestConfig_Load_SentryDSNDefaultsToEmptyWhenUnset(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("SENTRY_DSN", "")
+
+	cfg, err := config.Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.SentryDSN)
+}
+
+func TestConfig_Load_SentryDSNPassedThroughFromEnv(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("SENTRY_DSN", "https://abc123@o0.ingest.de.sentry.io/1")
+
+	cfg, err := config.Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "https://abc123@o0.ingest.de.sentry.io/1", cfg.SentryDSN)
+}

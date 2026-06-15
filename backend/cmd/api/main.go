@@ -9,11 +9,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	"go.opentelemetry.io/otel"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
 
 	"github.com/yuryalencar/research-events/internal/config"
 	"github.com/yuryalencar/research-events/internal/health"
+	"github.com/yuryalencar/research-events/internal/observability"
 )
 
 func main() {
@@ -28,6 +32,24 @@ func main() {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	// --- 1.5. Tracing ---
+
+	// InitTracerProvider configures OTel sampling and, if SENTRY_DSN is set,
+	// wires up the sentryotel bridge so spans are sent to Sentry. A malformed
+	// SENTRY_DSN is treated the same as a bad DATABASE_URL — fatal at startup.
+	tp, err := observability.InitTracerProvider(cfg)
+	if err != nil {
+		logger.Error("failed to initialize tracer provider", "error", err)
+		os.Exit(1)
+	}
+
+	// otel.SetTracerProvider registers tp as the GLOBAL tracer provider. Code
+	// that calls otel.GetTracerProvider() before this point (e.g. the GORM
+	// plugin below, or any third-party library) gets a proxy that delegates
+	// to tp from now on — see internal/observability/otel.go and
+	// cmd/api/server_db_test.go for more on this mechanism.
+	otel.SetTracerProvider(tp)
 
 	// --- 2. Database ---
 
@@ -58,6 +80,17 @@ func main() {
 
 	logger.Info("database connection established")
 
+	// --- 3.5. GORM tracing plugin ---
+
+	// Every GORM query now gets a child span under whatever span is in the
+	// query's context (the per-request root span from otelhttp).
+	// WithoutQueryVariables is REQUIRED — without it, SQL parameter values
+	// (e.g. submitter emails) would be embedded verbatim into span attributes.
+	if err := db.Use(tracing.NewPlugin(tracing.WithoutQueryVariables())); err != nil {
+		logger.Error("failed to register gorm tracing plugin", "error", err)
+		os.Exit(1)
+	}
+
 	// --- 4. Health checker registry ---
 
 	registry := health.NewRegistry()
@@ -67,7 +100,7 @@ func main() {
 
 	// BuildHandler is defined in server.go — extracted so tests can call it
 	// without starting a real server or waiting for OS signals.
-	httpHandler := BuildHandler(cfg, db, registry, logger)
+	httpHandler := BuildHandler(cfg, db, registry, logger, tp)
 
 	// --- 6. HTTP server ---
 
@@ -130,6 +163,25 @@ func main() {
 
 	if err := sqlDB.Close(); err != nil {
 		logger.Error("failed to close database connection", "error", err)
+	}
+
+	// --- 11. Flush tracing ---
+
+	// tp.Shutdown flushes any spans still buffered in the SentrySpanProcessor
+	// and releases its resources. sentry.Flush waits for buffered Sentry
+	// events/transactions to be sent. Both get the same 5s bound — if either
+	// is slow, we log a warning and exit anyway rather than hang shutdown.
+	traceCtx, traceCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer traceCancel()
+
+	if err := tp.Shutdown(traceCtx); err != nil {
+		logger.Warn("tracer provider shutdown did not complete cleanly", "error", err)
+	}
+
+	if cfg.SentryDSN != "" {
+		if !sentry.Flush(5 * time.Second) {
+			logger.Warn("sentry flush timed out before all events were sent")
+		}
 	}
 
 	logger.Info("server stopped gracefully")

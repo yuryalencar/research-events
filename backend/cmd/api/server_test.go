@@ -22,6 +22,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 
 	"github.com/yuryalencar/research-events/internal/config"
@@ -52,7 +56,7 @@ func TestBuildHandler_HealthRouteRegistered_Returns200WhenHealthy(t *testing.T) 
 	registry := health.NewRegistry()
 	registry.Register(mockChecker)
 
-	h := BuildHandler(testConfig(), nil, registry, discardLogger)
+	h := BuildHandler(testConfig(), nil, registry, discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -78,7 +82,7 @@ func TestBuildHandler_CORSHeaderPresentOnEveryResponse(t *testing.T) {
 
 	cfg := testConfig()
 	cfg.CORSAllowedOrigins = "https://example.com"
-	h := BuildHandler(cfg, nil, registry, discardLogger)
+	h := BuildHandler(cfg, nil, registry, discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -88,7 +92,7 @@ func TestBuildHandler_CORSHeaderPresentOnEveryResponse(t *testing.T) {
 }
 
 func TestBuildHandler_UnknownPathReturns404(t *testing.T) {
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist", nil)
 	rec := httptest.NewRecorder()
@@ -99,7 +103,7 @@ func TestBuildHandler_UnknownPathReturns404(t *testing.T) {
 
 func TestBuildHandler_AuthLoginRouteRegistered(t *testing.T) {
 	// Verifies the route is wired — empty body returns 400 (validation), not 404.
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
 	rec := httptest.NewRecorder()
@@ -110,7 +114,7 @@ func TestBuildHandler_AuthLoginRouteRegistered(t *testing.T) {
 
 func TestBuildHandler_AuthRefreshTokenRouteRegistered(t *testing.T) {
 	// No cookie → 401 REFRESH_TOKEN_MISSING, not 404.
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh-token", nil)
 	rec := httptest.NewRecorder()
@@ -121,7 +125,7 @@ func TestBuildHandler_AuthRefreshTokenRouteRegistered(t *testing.T) {
 
 func TestBuildHandler_AuthLogoutRouteRegistered(t *testing.T) {
 	// No cookie → 401 TOKEN_MISSING, not 404.
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 	rec := httptest.NewRecorder()
@@ -133,7 +137,7 @@ func TestBuildHandler_AuthLogoutRouteRegistered(t *testing.T) {
 func TestBuildHandler_EventsListRouteRegistered(t *testing.T) {
 	// ?year=abc fails validation before any repository call, so db=nil is safe —
 	// 400 (not 404) proves the route is wired.
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?year=abc", nil)
 	rec := httptest.NewRecorder()
@@ -145,7 +149,7 @@ func TestBuildHandler_EventsListRouteRegistered(t *testing.T) {
 func TestBuildHandler_EventsListRateLimited_Returns429AfterBurst(t *testing.T) {
 	// Spec: events-list.yaml border_case "31st request in the same minute from one
 	// IP (burst 30 exhausted) -> 429 RATE_LIMIT_EXCEEDED".
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	var lastCode int
 	for i := 0; i < 31; i++ {
@@ -161,11 +165,37 @@ func TestBuildHandler_EventsListRateLimited_Returns429AfterBurst(t *testing.T) {
 
 func TestBuildHandler_AdminUnlockRouteRegistered(t *testing.T) {
 	// No token cookie → 401 TOKEN_MISSING from RequireAuth, not 404.
-	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger)
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1/unlock", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	assert.NotEqual(t, http.StatusNotFound, rec.Code, "PATCH /api/v1/admin/users/{id}/unlock must be registered")
+}
+
+func TestBuildHandler_RequestProducesRootSpanWithHTTPMethodAndRoute(t *testing.T) {
+	// Spec: specs/backend/observability-opentelemetry.yaml
+	// Rule: "every request gets a root OTel span (via otelhttp)"
+	// Rule: "Required span attributes: http.method, http.route"
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSyncer(exporter),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+
+	registry := health.NewRegistry()
+	h := BuildHandler(testConfig(), nil, registry, discardLogger, tp)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	span := spans[0]
+	assert.Equal(t, "GET /health", span.Name)
+	assert.Contains(t, span.Attributes, attribute.String("http.request.method", "GET"))
+	assert.Contains(t, span.Attributes, attribute.String("http.route", "/health"))
 }

@@ -203,3 +203,35 @@ definition_of_done:
     with a comment explaining the no-op fallback.
   - go test ./... and go vet ./... remain fully green with SENTRY_DSN unset.
   - All border cases above have a corresponding test case.
+
+bug_fix:
+  symptom: >
+    With a valid SENTRY_DSN set and the backend running, requests succeeded
+    and traces were created (confirmed via OTel), but nothing ever appeared
+    in Sentry — neither the Issues onboarding screen nor Explore > Traces /
+    Insights > Backend.
+  root_cause: >
+    internal/observability/otel.go called sentry.Init with EnableTracing:
+    true but never set TracesSampleRate (or TracesSampler), leaving it at
+    its zero value (0.0). The sentryotel span processor starts a *Sentry*
+    transaction for every OTel root span via
+    sentry.StartTransaction(..., sentry.WithSpanSampled(SampledUndefined))
+    — there is no incoming sentry-trace header on a fresh request, so the
+    explicit sampling decision is "undefined". sentry-go's own (*Span).sample()
+    then falls through to ClientOptions.TracesSampleRate, sees 0.0, and drops
+    the transaction (SampledFalse) before it is ever sent — independently of,
+    and in addition to, the OTel ParentBased(TraceIDRatioBased(...)) sampler
+    that already decided to keep the span. Two independent sampling gates
+    were stacked, and the second one was effectively "always reject".
+  fix: >
+    Set TracesSampleRate: 1.0 in the sentry.Init ClientOptions (NOT
+    TracesSampleRate(cfg.Env) — that would cause double sampling, e.g.
+    0.2 x 0.2 = 0.04 effective rate in production). The OTel sampler remains
+    the single source of truth for which spans are created at all; sentry-go
+    is configured to pass through everything it receives unconditionally.
+  how_to_verify: >
+    go test ./internal/observability/... -run TestInitTracerProvider_ValidDSN
+    asserts sentry.CurrentHub().Client().Options().TracesSampleRate == 1.0
+    for a valid DSN. Manually: run the backend with a real SENTRY_DSN, hit
+    GET /health a few times, and confirm traces appear under Explore > Traces
+    in the Sentry project within ~1 minute.

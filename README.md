@@ -173,6 +173,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-14 | [Supersede a Deadline](ai-sessions/2026-06-14-event-deadlines-supersede-feature.md) | `POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede` — public, lets any contributor replace an active deadline with a new date/time/timezone; old row marked `is_active=false, superseded_by_id=<new id>`, new `superseded_by_id` field on every deadline response. Shared 50 req/min rate limiter. 322 tests. |
 | 2026-06-14 | [Admin/Moderator Event Review](ai-sessions/2026-06-14-admin-events-review-feature.md) | `PATCH /api/v1/admin/events/{id}/review` — admin/moderator only, approve/reject an event with an optional partial field edit (same validation as submission) and reviewer reason. New nullable `audit_logs.reason` column, re-review always allowed, moderators blocked from reviewing their own submissions. 377 tests. |
 | 2026-06-14 | [OpenTelemetry Tracing — Spec + Plan (partial)](ai-sessions/2026-06-14-observability-opentelemetry-planning.md) | Spec approved (HTTP + DB spans -> Sentry via `sentryotel` bridge) and Phase 2 plan presented. Phase 3 (Red) not started — resume from this checkpoint. |
+| 2026-06-15 | [OpenTelemetry Tracing — Sentry Double-Sampling Bug Fix](ai-sessions/2026-06-15-observability-tracing-bugfix.md) | Feature was implemented (388 tests) but no traces reached Sentry. Root cause: unset `TracesSampleRate` (0.0) on `sentry.Init` caused sentry-go to drop every transaction independently of the OTel sampler. Fixed by setting `TracesSampleRate: 1.0`. 389 tests. |
 
 ## Specs
 
@@ -192,7 +193,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Deadlines: time + timezone fields | [deadlines-add-time-timezone.yaml](specs/backend/deadlines-add-time-timezone.yaml) | Done |
 | Events: Supersede a Deadline | [events-deadlines-supersede.yaml](specs/backend/events-deadlines-supersede.yaml) | Done |
 | Admin: Review an Event | [admin-events-review.yaml](specs/backend/admin-events-review.yaml) | Done |
-| OpenTelemetry Tracing | [observability-opentelemetry.yaml](specs/backend/observability-opentelemetry.yaml) | Spec approved — implementation pending |
+| OpenTelemetry Tracing | [observability-opentelemetry.yaml](specs/backend/observability-opentelemetry.yaml) | Done |
 
 ---
 

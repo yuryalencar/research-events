@@ -136,27 +136,143 @@ shows stack traces, and can alert on-call engineers.
 **What it must NOT capture:** passwords, JWT tokens, email addresses — scrubbed
 in `BeforeSend`.
 
-**Where:** `internal/observability/sentry.go` (initialised at startup, added in the observability feature)
+**Where:** `internal/observability/otel.go` — `sentry.Init` is called from
+`InitTracerProvider` (non-empty `SentryDSN` path) so the error-reporting
+client and the tracing span processor share one initialization step. Panic
+recovery / `sentry.CaptureException` / `BeforeSend` scrubbing are not yet
+implemented — that's a separate future feature.
 
 ---
 
-### `go.opentelemetry.io/otel` (+ exporter packages)
+### `go.opentelemetry.io/otel`
 
-**What it is:** OpenTelemetry is the industry standard for distributed tracing.
-A "trace" is a tree of "spans" — each span records one operation (HTTP request,
-DB query, external call) with timing, attributes, and errors.
+**What it is:** the vendor-neutral OpenTelemetry tracing API. OpenTelemetry is
+the industry standard for distributed tracing. A "trace" is a tree of "spans"
+— each span records one operation (HTTP request, DB query, external call)
+with timing, attributes, and errors.
 
-**Why tracing matters:** logs tell you what happened; traces tell you *where time was spent*.
-If a request takes 500ms, a trace shows you: 2ms parsing, 480ms in a DB query, 18ms encoding.
+**Why tracing matters:** logs tell you what happened; traces tell you *where
+time was spent*. If a request takes 500ms, a trace shows you: 2ms parsing,
+480ms in a DB query, 18ms encoding.
+
+**What we use it for:** `otel.SetTextMapPropagator(...)` — registers how trace
+context (trace ID, span ID, sampling decision, baggage) is encoded onto/decoded
+from HTTP headers so a trace stays connected across services.
 
 **How it works in this project:**
-- OTel HTTP middleware wraps every handler → each request gets a root span automatically
-- Manual spans added for DB queries and operations over 100ms
-- Traces exported to Sentry via OTLP (so you see traces and errors in one place)
+- `InitTracerProvider` builds a `*sdktrace.TracerProvider` once at startup
+- OTel HTTP middleware (`otelhttp`, added in a later cycle) wraps every
+  handler → each request gets a root span automatically
+- Manual spans/GORM plugin spans added for DB queries and operations over 100ms
+- Finished spans are forwarded to Sentry via the `sentryotel` bridge (see below)
+  — **not** via an OTLP exporter
 
 **Span naming convention:** `resource.action` — e.g. `event.submit`, `deadline.supersede`, `db.query`
 
-**Where:** `internal/observability/otel.go` (added in the observability feature)
+**Where:** `internal/observability/otel.go`
+
+---
+
+### `go.opentelemetry.io/otel/sdk/trace` (`sdktrace`)
+
+**What it is:** the SDK implementation of the OTel tracing API above.
+
+**What it provides:**
+- `TracerProvider` — the factory every tracer/span is created from; owns the
+  sampler and span processors
+- `ParentBased` / `TraceIDRatioBased` — composable samplers. `ParentBased`
+  means "if this span has a parent, inherit its sampling decision; otherwise
+  apply the wrapped sampler" — this keeps a whole trace either fully sampled
+  or fully dropped, never half-and-half. `TraceIDRatioBased(rate)` samples a
+  fraction (`rate`) of new traces, derived deterministically from the trace ID
+  so the decision is consistent across services.
+- `SpanProcessor` — interface invoked when a span starts/ends; this is the
+  extension point used to forward spans to Sentry (`sentryotel.NewSentrySpanProcessor()`)
+
+**Where:** `internal/observability/otel.go` (`InitTracerProvider`, `TracesSampleRate`)
+
+---
+
+### `github.com/getsentry/sentry-go/otel` (`sentryotel`)
+
+**What it is:** the official bridge between OpenTelemetry and Sentry's
+performance/tracing product, maintained by Sentry.
+
+**What it provides:**
+- `NewSentrySpanProcessor()` — an `sdktrace.SpanProcessor` that forwards every
+  finished OTel span into Sentry as a transaction/span
+- `NewSentryPropagator()` — a `propagation.TextMapPropagator` that understands
+  Sentry's `sentry-trace` and `baggage` headers, so a trace stays linked when
+  it crosses a service that uses Sentry's own SDKs
+
+**Why this instead of an OTLP exporter:** Sentry's OTLP ingestion requires
+manually deriving an OTLP endpoint + `x-sentry-auth` header from the DSN — an
+undocumented, fragile path. `sentryotel` is the Sentry-documented integration:
+spans go through the same `sentry.Init`-configured client used for error
+reporting, so traces and errors share one pipeline.
+
+**Deprecation watch:** as of `sentry-go/otel` v0.46.2 (the latest released
+version, and what this project pins), `NewSentrySpanProcessor` carries a
+`Deprecated:` doc comment pointing at a future `sentryotlp.NewTraceExporter`
+and says it "will be removed in 0.47.0". That package does not exist in any
+released version yet, so there is nothing to migrate to today. **Do not run
+`go get -u` on `github.com/getsentry/sentry-go` / `github.com/getsentry/sentry-go/otel`
+without checking whether `sentryotlp` has shipped and re-reading this section**
+— a bump to 0.47.0 as-is would remove the function this integration depends on.
+
+**Where:** `internal/observability/otel.go` (`InitTracerProvider`, non-empty `SentryDSN` path)
+
+---
+
+### `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`
+
+**What it is:** OTel's official instrumentation for `net/http`. `otelhttp.NewHandler`
+wraps an `http.Handler` so every incoming request automatically gets a root span.
+
+**What it provides:**
+- A root span per request, named from the matched route (Go 1.22+'s
+  `http.ServeMux` sets `r.Pattern` after dispatch, e.g. `"GET /health"`, and
+  otelhttp uses that to rename the span)
+- Standard HTTP attributes (`http.request.method`, `http.response.status_code`, etc.)
+- `otelhttp.WithTracerProvider(tp)` — wires the handler to our `InitTracerProvider` output
+
+**Course correction:** the original plan assumed `otelhttp.WithRouteTag` would set
+an `http.route` span attribute. That option does not exist in v0.69.0 — only the
+span *name* is derived from `r.Pattern`, not an attribute. We added a small
+`traced` middleware (`cmd/api/server.go`) that runs after the mux has dispatched
+the request and sets `http.route` explicitly from `r.Pattern`.
+
+**Where:** `cmd/api/server.go` (`BuildHandler` — outermost layer, wraps the whole mux)
+
+---
+
+### `gorm.io/plugin/opentelemetry/tracing`
+
+**What it is:** GORM's official OpenTelemetry plugin. Registered once via
+`db.Use(...)`, it hooks into GORM's callback chain (`Create`, `Query`, `Update`,
+`Delete`, `Row`, `Raw`) and emits a child span for every query.
+
+**What it provides:**
+- A span per query, named `"{operation} {table}"` (e.g. `"select events"`),
+  with `db.operation.name`, `db.query.text`, and `db.collection.name` attributes
+- `trace.SpanKindClient` spans, automatically parented to whatever span is
+  already in the query's `context.Context` — i.e. the per-request root span
+  from `otelhttp`
+- `tracing.WithoutQueryVariables()` — **required** in this project. Without it,
+  the plugin interpolates bound parameters (e.g. a submitter's email address)
+  directly into the `db.query.text` attribute, which would leak PII into traces.
+  With it, only the parameterized SQL (`?` placeholders) is recorded.
+
+**Tracer provider resolution:** if no `tracing.WithTracerProvider(...)` option
+is passed, the plugin calls `otel.GetTracerProvider()` *once*, at registration
+time. Because OTel's global provider is a *delegating proxy*, a later call to
+`otel.SetTracerProvider(tp)` retroactively redirects the plugin's spans to `tp`
+— this is why `main.go` calls `otel.SetTracerProvider(tp)` before `db.Use(...)`
+is even relevant, and why tests can register the plugin once in `TestMain` and
+still redirect its output per-test via `otel.SetTracerProvider`.
+
+**Where:** `cmd/api/main.go` (registered on the real `db` after the startup
+ping), `cmd/api/testmain_test.go` (registered on `testDB` for integration tests)
 
 ---
 

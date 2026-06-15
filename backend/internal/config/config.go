@@ -15,6 +15,7 @@ type Config struct {
 	Env                string
 	CORSAllowedOrigins string
 	AppVersion         string
+	SentryDSN          string
 }
 
 // Load reads environment variables and returns a validated Config.
@@ -42,6 +43,7 @@ func Load() (Config, error) {
 		Env:                getEnv("ENV", "development"),
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 		AppVersion:         getEnv("APP_VERSION", "dev"),
+		SentryDSN:          getEnv("SENTRY_DSN", ""),
 	}, nil
 }
 
