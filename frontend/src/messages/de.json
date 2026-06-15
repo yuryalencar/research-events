@@ -28,5 +28,31 @@
     "INTERNAL_ERROR": "Auf unserer Seite ist etwas schiefgelaufen. Bitte versuche es später erneut.",
     "NETWORK_ERROR": "Verbindung zum Server fehlgeschlagen. Überprüfe deine Verbindung und versuche es erneut.",
     "UNKNOWN": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+  },
+  "home": {
+    "loading": "Veranstaltungen werden geladen…",
+    "noEvents": "Noch keine Veranstaltungen registriert."
+  },
+  "eventDetail": {
+    "detailsDescription": "Detaillierte Informationen zu dieser Veranstaltung, einschließlich Termine, Ort, Webseite, Fachbereich und Fristen.",
+    "tier": "CORE-Einstufung",
+    "dates": "Termine",
+    "location": "Ort",
+    "website": "Webseite",
+    "domain": "Fachbereich",
+    "noUpcomingDeadlines": "Keine anstehenden Fristen.",
+    "addedBy": "Hinzugefügt von {name}",
+    "updatedBy": "Aktualisiert von {name}",
+    "optional": "Optional",
+    "deadlineTypes": {
+      "abstract": "Abstract",
+      "paper": "Beitrag",
+      "notification": "Benachrichtigung",
+      "camera_ready": "Camera-ready",
+      "other": "Sonstiges"
+    },
+    "domains": {
+      "computer_science": "Informatik"
+    }
   }
 }

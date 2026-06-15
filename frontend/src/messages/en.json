@@ -28,5 +28,31 @@
     "INTERNAL_ERROR": "Something went wrong on our end. Please try again later.",
     "NETWORK_ERROR": "Couldn't connect to the server. Check your connection and try again.",
     "UNKNOWN": "Something went wrong. Please try again."
+  },
+  "home": {
+    "loading": "Loading events…",
+    "noEvents": "No events registered yet."
+  },
+  "eventDetail": {
+    "detailsDescription": "Detailed information about this event, including dates, location, website, domain, and deadlines.",
+    "tier": "CORE Tier",
+    "dates": "Dates",
+    "location": "Location",
+    "website": "Website",
+    "domain": "Domain",
+    "noUpcomingDeadlines": "No upcoming deadlines.",
+    "addedBy": "Added by {name}",
+    "updatedBy": "Updated by {name}",
+    "optional": "Optional",
+    "deadlineTypes": {
+      "abstract": "Abstract",
+      "paper": "Paper",
+      "notification": "Notification",
+      "camera_ready": "Camera-ready",
+      "other": "Other"
+    },
+    "domains": {
+      "computer_science": "Computer Science"
+    }
   }
 }

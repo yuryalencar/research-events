@@ -88,3 +88,24 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  /*
+   * Starfield background for the globe homepage. The dots are a tiled
+   * radial-gradient pattern (no image assets needed), layered with two soft
+   * nebula glows. The globe itself uses a transparent background so this
+   * shows through behind it.
+   */
+  .space-bg {
+    background-color: #05070f;
+    background-image:
+      radial-gradient(1.5px 1.5px at 20px 30px, rgba(255, 255, 255, 0.9), transparent),
+      radial-gradient(1px 1px at 90px 130px, rgba(255, 255, 255, 0.6), transparent),
+      radial-gradient(1.5px 1.5px at 160px 60px, rgba(255, 255, 255, 0.7), transparent),
+      radial-gradient(1px 1px at 210px 170px, rgba(255, 255, 255, 0.5), transparent),
+      radial-gradient(circle at 25% 30%, rgba(99, 102, 241, 0.18), transparent 45%),
+      radial-gradient(circle at 75% 75%, rgba(168, 85, 247, 0.15), transparent 50%);
+    background-size: 240px 240px, 240px 240px, 240px 240px, 240px 240px, 100% 100%, 100% 100%;
+    background-repeat: repeat, repeat, repeat, repeat, no-repeat, no-repeat;
+  }
+}

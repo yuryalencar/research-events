@@ -28,5 +28,31 @@
     "INTERNAL_ERROR": "Algo salió mal de nuestro lado. Inténtalo de nuevo más tarde.",
     "NETWORK_ERROR": "No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.",
     "UNKNOWN": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "home": {
+    "loading": "Cargando eventos…",
+    "noEvents": "Aún no hay eventos registrados."
+  },
+  "eventDetail": {
+    "detailsDescription": "Información detallada sobre este evento, incluyendo fechas, ubicación, sitio web, área y plazos.",
+    "tier": "Clasificación CORE",
+    "dates": "Fechas",
+    "location": "Ubicación",
+    "website": "Sitio web",
+    "domain": "Área",
+    "noUpcomingDeadlines": "No hay plazos próximos.",
+    "addedBy": "Agregado por {name}",
+    "updatedBy": "Actualizado por {name}",
+    "optional": "Opcional",
+    "deadlineTypes": {
+      "abstract": "Resumen",
+      "paper": "Artículo",
+      "notification": "Notificación",
+      "camera_ready": "Versión final",
+      "other": "Otro"
+    },
+    "domains": {
+      "computer_science": "Ciencias de la Computación"
+    }
   }
 }
