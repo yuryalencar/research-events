@@ -1,5 +1,32 @@
 {
   "app": {
     "title": "ReSEARCH Events"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Please check your input and try again.",
+    "UNAUTHORIZED": "You need to be logged in to do that.",
+    "TOKEN_MISSING": "You need to be logged in to do that.",
+    "TOKEN_EXPIRED": "Your session has expired. Please log in again.",
+    "TOKEN_INVALID": "Your session is invalid. Please log in again.",
+    "INVALID_CREDENTIALS": "Incorrect email or password.",
+    "ACCOUNT_LOCKED": "This account is locked. Contact an administrator.",
+    "REFRESH_TOKEN_MISSING": "Your session has expired. Please log in again.",
+    "REFRESH_TOKEN_INVALID": "Your session has expired. Please log in again.",
+    "REFRESH_TOKEN_REUSE": "Your session is no longer valid. Please log in again.",
+    "FORBIDDEN": "You don't have permission to do that.",
+    "CANNOT_REVIEW_OWN_EVENT": "You can't review an event you submitted yourself.",
+    "CANNOT_UNLOCK_SELF": "You can't unlock your own account.",
+    "EVENT_NOT_FOUND": "Event not found.",
+    "DEADLINE_NOT_FOUND": "Deadline not found.",
+    "USER_NOT_FOUND": "User not found.",
+    "EVENT_NOT_APPROVED": "This event hasn't been approved yet.",
+    "EVENT_ALREADY_SUBMITTED": "An event with this name/slug has already been submitted.",
+    "DEADLINE_ALREADY_INACTIVE": "This deadline is no longer active.",
+    "SLUG_ALREADY_EXISTS": "An event with this name already exists.",
+    "USER_NOT_LOCKED": "This account is not locked.",
+    "RATE_LIMIT_EXCEEDED": "Too many requests. Please wait a moment and try again.",
+    "INTERNAL_ERROR": "Something went wrong on our end. Please try again later.",
+    "NETWORK_ERROR": "Couldn't connect to the server. Check your connection and try again.",
+    "UNKNOWN": "Something went wrong. Please try again."
   }
 }

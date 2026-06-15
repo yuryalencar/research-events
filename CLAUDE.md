@@ -205,9 +205,10 @@ AuditLog
 ## API Design
 
 - Base path: `/api/v1/`
-- Response envelope:
-  - Success: `{ "data": T, "meta": { "page": N, "total": N } }`
-  - Error: `{ "error": { "code": "EVENT_NOT_FOUND", "message": "..." } }`
+- Response envelope (matches `internal/handler/auth.go` `writeSuccess`/`writeSuccessWithMeta`/`writeError`):
+  - Success: `{ "code": "SOME_CODE", "data": T }`
+  - Success (list endpoints): `{ "code": "SOME_CODE", "data": T[], "meta": { "page": N, "total": N } }`
+  - Error: `{ "code": "EVENT_NOT_FOUND", "error": { "message": "..." } }`
 - Key endpoints:
   - `GET    /api/v1/events` — filterable by `year`, `domain`, `country`, `bbox`
   - `GET    /api/v1/events/:id` — includes active deadlines + contributor attribution

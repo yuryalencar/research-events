@@ -174,6 +174,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-14 | [Admin/Moderator Event Review](ai-sessions/2026-06-14-admin-events-review-feature.md) | `PATCH /api/v1/admin/events/{id}/review` — admin/moderator only, approve/reject an event with an optional partial field edit (same validation as submission) and reviewer reason. New nullable `audit_logs.reason` column, re-review always allowed, moderators blocked from reviewing their own submissions. 377 tests. |
 | 2026-06-14 | [OpenTelemetry Tracing — Spec + Plan (partial)](ai-sessions/2026-06-14-observability-opentelemetry-planning.md) | Spec approved (HTTP + DB spans -> Sentry via `sentryotel` bridge) and Phase 2 plan presented. Phase 3 (Red) not started — resume from this checkpoint. |
 | 2026-06-15 | [OpenTelemetry Tracing — Sentry Double-Sampling Bug Fix](ai-sessions/2026-06-15-observability-tracing-bugfix.md) | Feature was implemented (388 tests) but no traces reached Sentry. Root cause: unset `TracesSampleRate` (0.0) on `sentry.Init` caused sentry-go to drop every transaction independently of the OTel sampler. Fixed by setting `TracesSampleRate: 1.0`. 389 tests. |
+| 2026-06-15 | [API Client + Error Handling (Frontend)](ai-sessions/2026-06-15-frontend-api-client-error-handling-feature.md) | First frontend feature: typed `lib/api/*` client (`apiRequest`/`apiPrivateRequest` with refresh-and-retry, `ApiError`), centralized `errorMessageKey`/`handleApiError` -> sonner toasts, `errors` i18n namespace (25 keys, 4 locales), hand-written `types/api.ts`, shadcn/ui + sonner setup. 57 tests. Also fixed `pnpm lint` (Next 16 dropped `next lint`; added flat `eslint.config.mjs`, pinned `eslint` to `^9` for `eslint-plugin-react` compatibility). |
 
 ## Specs
 
@@ -194,6 +195,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Events: Supersede a Deadline | [events-deadlines-supersede.yaml](specs/backend/events-deadlines-supersede.yaml) | Done |
 | Admin: Review an Event | [admin-events-review.yaml](specs/backend/admin-events-review.yaml) | Done |
 | OpenTelemetry Tracing | [observability-opentelemetry.yaml](specs/backend/observability-opentelemetry.yaml) | Done |
+| API Client + Error Handling (Frontend) | [api-client-error-handling.md](specs/frontend/api-client-error-handling.md) | Done |
 
 ---
 

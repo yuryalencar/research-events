@@ -1,5 +1,32 @@
 {
   "app": {
     "title": "ReSEARCH Events"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Revisa los datos ingresados e inténtalo de nuevo.",
+    "UNAUTHORIZED": "Necesitas iniciar sesión para hacer eso.",
+    "TOKEN_MISSING": "Necesitas iniciar sesión para hacer eso.",
+    "TOKEN_EXPIRED": "Tu sesión ha expirado. Inicia sesión de nuevo.",
+    "TOKEN_INVALID": "Tu sesión no es válida. Inicia sesión de nuevo.",
+    "INVALID_CREDENTIALS": "Correo electrónico o contraseña incorrectos.",
+    "ACCOUNT_LOCKED": "Esta cuenta está bloqueada. Contacta a un administrador.",
+    "REFRESH_TOKEN_MISSING": "Tu sesión ha expirado. Inicia sesión de nuevo.",
+    "REFRESH_TOKEN_INVALID": "Tu sesión ha expirado. Inicia sesión de nuevo.",
+    "REFRESH_TOKEN_REUSE": "Tu sesión ya no es válida. Inicia sesión de nuevo.",
+    "FORBIDDEN": "No tienes permiso para hacer eso.",
+    "CANNOT_REVIEW_OWN_EVENT": "No puedes revisar un evento que tú mismo enviaste.",
+    "CANNOT_UNLOCK_SELF": "No puedes desbloquear tu propia cuenta.",
+    "EVENT_NOT_FOUND": "Evento no encontrado.",
+    "DEADLINE_NOT_FOUND": "Plazo no encontrado.",
+    "USER_NOT_FOUND": "Usuario no encontrado.",
+    "EVENT_NOT_APPROVED": "Este evento aún no ha sido aprobado.",
+    "EVENT_ALREADY_SUBMITTED": "Ya existe un evento con este nombre/slug.",
+    "DEADLINE_ALREADY_INACTIVE": "Este plazo ya no está activo.",
+    "SLUG_ALREADY_EXISTS": "Ya existe un evento con este nombre.",
+    "USER_NOT_LOCKED": "Esta cuenta no está bloqueada.",
+    "RATE_LIMIT_EXCEEDED": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+    "INTERNAL_ERROR": "Algo salió mal de nuestro lado. Inténtalo de nuevo más tarde.",
+    "NETWORK_ERROR": "No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.",
+    "UNKNOWN": "Algo salió mal. Inténtalo de nuevo."
   }
 }
