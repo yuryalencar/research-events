@@ -19,11 +19,11 @@ const GlobeView = dynamic(() => import("@/components/globe/GlobeView").then((mod
 export default function Page(): JSX.Element {
   const t = useTranslations("home")
   const { events, isLoading } = useEvents()
-  const { selectedEvent, selectEvent, closeDetail } = useSelectedEvent()
+  const { selectedEvent, selectEvent, closeDetail } = useSelectedEvent(events)
 
   return (
     <main className="space-bg relative h-screen w-full">
-      <GlobeView events={events} selectedEventId={selectedEvent?.id ?? null} onPointClick={selectEvent} />
+      <GlobeView events={events} selectedEvent={selectedEvent} onPointClick={selectEvent} />
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">

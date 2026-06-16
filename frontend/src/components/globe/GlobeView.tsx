@@ -11,7 +11,7 @@ import type { EventListItem } from "@/types/api"
 
 interface GlobeViewProps {
   events: EventListItem[]
-  selectedEventId: number | null
+  selectedEvent: EventListItem | null
   onPointClick: (event: EventListItem) => void
 }
 
@@ -20,6 +20,7 @@ interface GlobeViewProps {
 const PIN_ALTITUDE = 0.015
 const PIN_RADIUS = 0.8
 const SELECTED_PIN_RADIUS = 1.2
+const ROTATION_DURATION_MS = 600
 
 // --- Component ---
 
@@ -27,7 +28,7 @@ const SELECTED_PIN_RADIUS = 1.2
 // globe.gl library. This component must only ever be loaded with
 // `dynamic(() => import(...), { ssr: false })` (see page.tsx) — globe.gl
 // requires WebGL, which doesn't exist during server rendering.
-function GlobeView({ events, selectedEventId, onPointClick }: GlobeViewProps): JSX.Element {
+function GlobeView({ events, selectedEvent, onPointClick }: GlobeViewProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<GlobeInstance | null>(null)
 
@@ -64,19 +65,29 @@ function GlobeView({ events, selectedEventId, onPointClick }: GlobeViewProps): J
     const globe = globeRef.current
     if (!globe) return
 
+    const selectedId = selectedEvent?.id ?? null
+
     globe
       .pointsData(events)
       .pointLat((point) => (point as EventListItem).latitude)
       .pointLng((point) => (point as EventListItem).longitude)
       .pointColor((point) => {
         const event = point as EventListItem
-        return getPinColor(event.id, event.end_date, selectedEventId, new Date())
+        return getPinColor(event.id, event.end_date, selectedId, new Date())
       })
-      .pointRadius((point) =>
-        (point as EventListItem).id === selectedEventId ? SELECTED_PIN_RADIUS : PIN_RADIUS
-      )
+      .pointRadius((point) => ((point as EventListItem).id === selectedId ? SELECTED_PIN_RADIUS : PIN_RADIUS))
       .onPointClick((point) => onPointClick(point as EventListItem))
-  }, [events, selectedEventId, onPointClick])
+
+    // Rotate to the selected event while preserving the user's current zoom
+    // level (altitude). Only re-orient lat/lng — never snap the camera.
+    if (selectedEvent !== null) {
+      const { altitude } = globe.pointOfView()
+      globe.pointOfView(
+        { lat: selectedEvent.latitude, lng: selectedEvent.longitude, altitude },
+        ROTATION_DURATION_MS,
+      )
+    }
+  }, [events, selectedEvent, onPointClick])
 
   return <div ref={containerRef} className="h-full w-full" />
 }
