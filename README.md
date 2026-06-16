@@ -177,6 +177,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-15 | [API Client + Error Handling (Frontend)](ai-sessions/2026-06-15-frontend-api-client-error-handling-feature.md) | First frontend feature: typed `lib/api/*` client (`apiRequest`/`apiPrivateRequest` with refresh-and-retry, `ApiError`), centralized `errorMessageKey`/`handleApiError` -> sonner toasts, `errors` i18n namespace (25 keys, 4 locales), hand-written `types/api.ts`, shadcn/ui + sonner setup. 57 tests. Also fixed `pnpm lint` (Next 16 dropped `next lint`; added flat `eslint.config.mjs`, pinned `eslint` to `^9` for `eslint-plugin-react` compatibility). |
 | 2026-06-15 | [Globe Homepage (Frontend)](ai-sessions/2026-06-15-globe-homepage-feature.md) | 3D globe (Globe.gl) plots approved events as pins (yellow/pink/red for default/selected/past), starfield background, Sheet (desktop)/Drawer (mobile) detail view with localized domain + tier + date-range display, scrollable deadline list, loading/empty-state overlays, `proxy.ts` rename, hydration fix, 8 seeded events. 93 tests. |
 | 2026-06-16 | [Globe Event Deep-link via URL Slug (Frontend)](ai-sessions/2026-06-16-globe-event-deeplink-feature.md) | `?event=SLUG` deep-linking on the globe homepage — clicking a pin sets the param, closing removes it, loading with the param auto-selects from the existing events list (no extra API call). Globe rotates to selected event (preserving zoom). `useSelectedEvent` extended with URL sync + slug resolution. 101 tests. |
+| 2026-06-16 | [Info Modal — Floating Info Button (Frontend)](ai-sessions/2026-06-16-info-modal-feature.md) | Floating `ⓘ` button (bottom-left, `z-40`) opens a Dialog (desktop) / Drawer (mobile) with 6 sections: version, pin legend, submission flow, moderator contact, author credit, open-source invite. New `ui/dialog.tsx` primitive, full i18n (en/pt/es/de), hidden on mobile when event Drawer is open. |
 
 ## Specs
 
@@ -200,6 +201,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | API Client + Error Handling (Frontend) | [api-client-error-handling.md](specs/frontend/api-client-error-handling.md) | Done |
 | Globe Homepage (Frontend) | [globe-homepage.md](specs/frontend/globe-homepage.md) | Done |
 | Globe Event Deep-link (Frontend) | [globe-event-deeplink.md](specs/frontend/globe-event-deeplink.md) | Done |
+| Info Modal — Floating Info Button (Frontend) | [info-modal.md](specs/frontend/info-modal.md) | Done |
 
 ---
 

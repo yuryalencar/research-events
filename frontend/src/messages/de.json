@@ -33,6 +33,35 @@
     "loading": "Veranstaltungen werden geladen…",
     "noEvents": "Noch keine Veranstaltungen registriert."
   },
+  "info": {
+    "buttonLabel": "Über dieses Projekt",
+    "title": "Über ReSEARCH Events",
+    "version": "Version",
+    "legendTitle": "Kartenlegende",
+    "yellowPin": {
+      "label": "Bevorstehend",
+      "description": "Konferenz, die noch nicht beendet ist."
+    },
+    "redPin": {
+      "label": "Vergangen",
+      "description": "Das Enddatum der Konferenz ist bereits überschritten."
+    },
+    "pinkPin": {
+      "label": "Ausgewählt",
+      "description": "Aktuell ausgewählte Konferenz (angeklickter Marker)."
+    },
+    "howItWorksTitle": "Wie Veranstaltungen hinzugefügt werden",
+    "howItWorksDescription": "Jeder aus der Forschungsgemeinschaft kann eine Konferenz einreichen, indem er Name, Ort, Termine, Webseite und Fristen angibt. Die Einreichung erhält den Status 'ausstehend' und wird dann von einem Moderator geprüft, bevor sie auf dem Globus erscheint. Moderatoren dürfen keine Veranstaltungen prüfen, die sie selbst eingereicht haben, um einen fairen und unparteiischen Prozess zu gewährleisten. ReSEARCH Events ist ein kollaboratives Werkzeug für und von der Forschungsgemeinschaft.",
+    "moderatorTitle": "Moderator werden",
+    "moderatorDescription": "Möchtest du bei der Prüfung von Einreichungen helfen? Schick uns eine E-Mail und wir melden uns.",
+    "moderatorEmailLabel": "E-Mail senden",
+    "authorTitle": "Über den Autor",
+    "authorDescription": "Erstellt von Yury Lima.",
+    "authorLinkLabel": "GitHub-Profil",
+    "contributeTitle": "Mitmachen",
+    "contributeDescription": "ReSEARCH Events ist Open Source. Hast du eine Idee oder möchtest du mitbauen?",
+    "contributeLinkLabel": "Projekt auf GitHub ansehen"
+  },
   "eventDetail": {
     "detailsDescription": "Detaillierte Informationen zu dieser Veranstaltung, einschließlich Termine, Ort, Webseite, Fachbereich und Fristen.",
     "tier": "CORE-Einstufung",

@@ -33,6 +33,35 @@
     "loading": "Loading events…",
     "noEvents": "No events registered yet."
   },
+  "info": {
+    "buttonLabel": "About this project",
+    "title": "About ReSEARCH Events",
+    "version": "Version",
+    "legendTitle": "Map legend",
+    "yellowPin": {
+      "label": "Upcoming",
+      "description": "Conference hasn't ended yet."
+    },
+    "redPin": {
+      "label": "Past",
+      "description": "Conference end date has already passed."
+    },
+    "pinkPin": {
+      "label": "Selected",
+      "description": "Currently selected conference (clicked pin)."
+    },
+    "howItWorksTitle": "How events are added",
+    "howItWorksDescription": "Anyone in the research community can submit a conference by providing its name, location, dates, website, and deadlines. The submission enters a pending state and is then reviewed by a moderator before it becomes visible on the globe. Moderators cannot review events they submitted themselves, keeping the process fair and impartial. ReSEARCH Events is a collaborative tool built for and by the research community.",
+    "moderatorTitle": "Become a moderator",
+    "moderatorDescription": "Want to help review event submissions? Send us an email and we'll get back to you.",
+    "moderatorEmailLabel": "Send an email",
+    "authorTitle": "About the author",
+    "authorDescription": "Created by Yury Lima.",
+    "authorLinkLabel": "GitHub profile",
+    "contributeTitle": "Contribute",
+    "contributeDescription": "ReSEARCH Events is open source. Have a feature idea or want to help build it?",
+    "contributeLinkLabel": "View the project on GitHub"
+  },
   "eventDetail": {
     "detailsDescription": "Detailed information about this event, including dates, location, website, domain, and deadlines.",
     "tier": "CORE Tier",

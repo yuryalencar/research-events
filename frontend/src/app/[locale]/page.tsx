@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { useTranslations } from "next-intl"
 
 import { EventDetailView } from "@/components/events/EventDetailView"
+import { InfoButton } from "@/components/globe/InfoButton"
 import { useEvents } from "@/hooks/useEvents"
 import { useSelectedEvent } from "@/hooks/useSelectedEvent"
 
@@ -47,6 +48,8 @@ export default function Page(): JSX.Element {
           </div>
         </div>
       )}
+
+      <InfoButton drawerOpen={selectedEvent !== null} />
 
       <EventDetailView event={selectedEvent} onClose={closeDetail} />
     </main>

@@ -33,6 +33,35 @@
     "loading": "Cargando eventos…",
     "noEvents": "Aún no hay eventos registrados."
   },
+  "info": {
+    "buttonLabel": "Sobre este proyecto",
+    "title": "Sobre ReSEARCH Events",
+    "version": "Versión",
+    "legendTitle": "Leyenda del mapa",
+    "yellowPin": {
+      "label": "Próximo",
+      "description": "Conferencia que aún no ha terminado."
+    },
+    "redPin": {
+      "label": "Pasado",
+      "description": "La fecha de finalización de la conferencia ya pasó."
+    },
+    "pinkPin": {
+      "label": "Seleccionado",
+      "description": "Conferencia actualmente seleccionada (marcador clicado)."
+    },
+    "howItWorksTitle": "Cómo se agregan los eventos",
+    "howItWorksDescription": "Cualquier persona de la comunidad investigadora puede enviar una conferencia proporcionando su nombre, ubicación, fechas, sitio web y plazos. La solicitud entra en estado pendiente y luego es revisada por un moderador antes de aparecer en el globo. Los moderadores no pueden revisar eventos que ellos mismos enviaron, manteniendo el proceso justo e imparcial. ReSEARCH Events es una herramienta colaborativa creada para y por la comunidad investigadora.",
+    "moderatorTitle": "Conviértete en moderador",
+    "moderatorDescription": "¿Quieres ayudar a revisar las solicitudes de eventos? Envíanos un correo y te responderemos.",
+    "moderatorEmailLabel": "Enviar un correo",
+    "authorTitle": "Sobre el autor",
+    "authorDescription": "Creado por Yury Lima.",
+    "authorLinkLabel": "Perfil de GitHub",
+    "contributeTitle": "Contribuye",
+    "contributeDescription": "ReSEARCH Events es de código abierto. ¿Tienes alguna idea de función o quieres ayudar a construirla?",
+    "contributeLinkLabel": "Ver el proyecto en GitHub"
+  },
   "eventDetail": {
     "detailsDescription": "Información detallada sobre este evento, incluyendo fechas, ubicación, sitio web, área y plazos.",
     "tier": "Clasificación CORE",
