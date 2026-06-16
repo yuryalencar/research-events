@@ -178,6 +178,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-15 | [Globe Homepage (Frontend)](ai-sessions/2026-06-15-globe-homepage-feature.md) | 3D globe (Globe.gl) plots approved events as pins (yellow/pink/red for default/selected/past), starfield background, Sheet (desktop)/Drawer (mobile) detail view with localized domain + tier + date-range display, scrollable deadline list, loading/empty-state overlays, `proxy.ts` rename, hydration fix, 8 seeded events. 93 tests. |
 | 2026-06-16 | [Globe Event Deep-link via URL Slug (Frontend)](ai-sessions/2026-06-16-globe-event-deeplink-feature.md) | `?event=SLUG` deep-linking on the globe homepage — clicking a pin sets the param, closing removes it, loading with the param auto-selects from the existing events list (no extra API call). Globe rotates to selected event (preserving zoom). `useSelectedEvent` extended with URL sync + slug resolution. 101 tests. |
 | 2026-06-16 | [Info Modal — Floating Info Button (Frontend)](ai-sessions/2026-06-16-info-modal-feature.md) | Floating `ⓘ` button (bottom-left, `z-40`) opens a Dialog (desktop) / Drawer (mobile) with 6 sections: version, pin legend, submission flow, moderator contact, author credit, open-source invite. New `ui/dialog.tsx` primitive, full i18n (en/pt/es/de), hidden on mobile when event Drawer is open. |
+| 2026-06-16 | [Globe Event Filters (Frontend)](ai-sessions/2026-06-16-globe-filters-feature.md) | Collapsible floating filter panel (top-left): year stepper, domain dropdown, tier chips, country native-select, deadline month dropdown. Draft/applied two-stage state, Apply rotates globe to first result, Reset restores form only, mobile auto-close, locale-aware month names, `noEventsFiltered` empty-state message. `useFilters` + `useEvents` updated. 129 tests. |
 
 ## Specs
 
@@ -202,6 +203,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Globe Homepage (Frontend) | [globe-homepage.md](specs/frontend/globe-homepage.md) | Done |
 | Globe Event Deep-link (Frontend) | [globe-event-deeplink.md](specs/frontend/globe-event-deeplink.md) | Done |
 | Info Modal — Floating Info Button (Frontend) | [info-modal.md](specs/frontend/info-modal.md) | Done |
+| Globe Event Filters (Frontend) | [globe-filters.md](specs/frontend/globe-filters.md) | Done |
 
 ---
 

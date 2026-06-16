@@ -31,7 +31,37 @@
   },
   "home": {
     "loading": "Veranstaltungen werden geladen…",
-    "noEvents": "Noch keine Veranstaltungen registriert."
+    "noEvents": "Noch keine Veranstaltungen registriert.",
+    "noEventsFiltered": "Keine Veranstaltungen entsprechen den aktuellen Filtern. Versuche, sie anzupassen oder zurückzusetzen."
+  },
+  "filters": {
+    "title": "Filter",
+    "toggleLabel": "Filter ein-/ausblenden",
+    "apply": "Anwenden",
+    "reset": "Zurücksetzen",
+    "yearLabel": "Jahr",
+    "prevYear": "Vorheriges Jahr",
+    "nextYear": "Nächstes Jahr",
+    "domainLabel": "Fachbereich",
+    "allDomains": "Alle Fachbereiche",
+    "tierLabel": "Einstufung",
+    "allTiers": "Alle",
+    "countryLabel": "Land",
+    "allCountries": "Alle Länder",
+    "countryPlaceholder": "Länder suchen…",
+    "deadlineMonthLabel": "Monat der ersten Frist",
+    "allMonths": "Alle Monate",
+    "activeFiltersIndicator": "Aktive Filter",
+    "domains": {
+      "computer_science": "Informatik"
+    },
+    "tiers": {
+      "A*": "A*",
+      "A": "A",
+      "B": "B",
+      "C": "C",
+      "unranked": "Ohne Wertung"
+    }
   },
   "info": {
     "buttonLabel": "Über dieses Projekt",

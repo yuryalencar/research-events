@@ -40,6 +40,8 @@ const event: EventListItem = {
   updated_at: "2026-01-01T00:00:00Z",
 }
 
+const baseFilters = { year: 2026 }
+
 describe("useEvents", () => {
   beforeEach(() => {
     vi.mocked(listEvents).mockReset()
@@ -49,7 +51,7 @@ describe("useEvents", () => {
   it("starts in a loading state with no events", () => {
     vi.mocked(listEvents).mockReturnValue(new Promise(() => {}))
 
-    const { result } = renderHook(() => useEvents())
+    const { result } = renderHook(() => useEvents(baseFilters))
 
     expect(result.current.isLoading).toBe(true)
     expect(result.current.events).toEqual([])
@@ -58,18 +60,18 @@ describe("useEvents", () => {
   it("calls listEvents with pagination off and stores the returned events", async () => {
     vi.mocked(listEvents).mockResolvedValue({ data: [event], meta: { page: 1, total: 1 } })
 
-    const { result } = renderHook(() => useEvents())
+    const { result } = renderHook(() => useEvents(baseFilters))
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-    expect(listEvents).toHaveBeenCalledWith({ pagination: "off" })
+    expect(listEvents).toHaveBeenCalledWith({ year: 2026, pagination: "off" })
     expect(result.current.events).toEqual([event])
   })
 
   it("calls handleApiError and leaves events empty when the fetch fails", async () => {
     vi.mocked(listEvents).mockRejectedValue(new Error("network error"))
 
-    const { result } = renderHook(() => useEvents())
+    const { result } = renderHook(() => useEvents(baseFilters))
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
@@ -80,11 +82,80 @@ describe("useEvents", () => {
   it("returns an empty events array when data is empty", async () => {
     vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
 
-    const { result } = renderHook(() => useEvents())
+    const { result } = renderHook(() => useEvents(baseFilters))
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
     expect(result.current.events).toEqual([])
     expect(handleApiError).not.toHaveBeenCalled()
+  })
+
+  // --- Filter params ---
+  // Spec: "year is always included in every listEvents call — never omitted" (Rules)
+
+  it("always sends pagination=off regardless of filters", async () => {
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const { result } = renderHook(() => useEvents({ year: 2025, domain: "computer_science" }))
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(vi.mocked(listEvents).mock.calls[0][0]).toMatchObject({ pagination: "off" })
+  })
+
+  it("includes optional filters in params when set", async () => {
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const filters = {
+      year: 2025,
+      domain: "computer_science",
+      tier: "A",
+      country: "Brazil",
+      firstDeadlineMonth: 6,
+    }
+
+    const { result } = renderHook(() => useEvents(filters))
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(listEvents).toHaveBeenCalledWith({
+      year: 2025,
+      domain: "computer_science",
+      tier: "A",
+      country: "Brazil",
+      first_deadline_month: 6,
+      pagination: "off",
+    })
+  })
+
+  it("omits optional filters from params when undefined", async () => {
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const { result } = renderHook(() => useEvents({ year: 2026 }))
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    const calledWith = vi.mocked(listEvents).mock.calls[0][0]
+    expect(calledWith).not.toHaveProperty("domain")
+    expect(calledWith).not.toHaveProperty("tier")
+    expect(calledWith).not.toHaveProperty("country")
+    expect(calledWith).not.toHaveProperty("first_deadline_month")
+  })
+
+  it("re-fetches when filters change", async () => {
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const { result, rerender } = renderHook(
+      ({ filters }: { filters: { year: number } }) => useEvents(filters),
+      { initialProps: { filters: { year: 2026 } } },
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(listEvents).toHaveBeenCalledTimes(1)
+
+    rerender({ filters: { year: 2025 } })
+
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2))
+    expect(listEvents).toHaveBeenLastCalledWith({ year: 2025, pagination: "off" })
   })
 })

@@ -31,7 +31,37 @@
   },
   "home": {
     "loading": "Carregando eventos…",
-    "noEvents": "Nenhum evento cadastrado ainda."
+    "noEvents": "Nenhum evento cadastrado ainda.",
+    "noEventsFiltered": "Nenhum evento corresponde aos filtros atuais. Tente ajustar ou redefinir os filtros."
+  },
+  "filters": {
+    "title": "Filtros",
+    "toggleLabel": "Alternar filtros",
+    "apply": "Aplicar",
+    "reset": "Redefinir",
+    "yearLabel": "Ano",
+    "prevYear": "Ano anterior",
+    "nextYear": "Próximo ano",
+    "domainLabel": "Área",
+    "allDomains": "Todas as áreas",
+    "tierLabel": "Classificação",
+    "allTiers": "Todas",
+    "countryLabel": "País",
+    "allCountries": "Todos os países",
+    "countryPlaceholder": "Buscar países…",
+    "deadlineMonthLabel": "Mês do primeiro prazo",
+    "allMonths": "Todos os meses",
+    "activeFiltersIndicator": "Filtros ativos",
+    "domains": {
+      "computer_science": "Ciência da Computação"
+    },
+    "tiers": {
+      "A*": "A*",
+      "A": "A",
+      "B": "B",
+      "C": "C",
+      "unranked": "Sem classificação"
+    }
   },
   "info": {
     "buttonLabel": "Sobre este projeto",

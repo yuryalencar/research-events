@@ -13,6 +13,7 @@ interface GlobeViewProps {
   events: EventListItem[]
   selectedEvent: EventListItem | null
   onPointClick: (event: EventListItem) => void
+  focusPoint?: { lat: number; lng: number } | null
 }
 
 // --- Constants ---
@@ -28,7 +29,7 @@ const ROTATION_DURATION_MS = 600
 // globe.gl library. This component must only ever be loaded with
 // `dynamic(() => import(...), { ssr: false })` (see page.tsx) — globe.gl
 // requires WebGL, which doesn't exist during server rendering.
-function GlobeView({ events, selectedEvent, onPointClick }: GlobeViewProps): JSX.Element {
+function GlobeView({ events, selectedEvent, onPointClick, focusPoint }: GlobeViewProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<GlobeInstance | null>(null)
 
@@ -88,6 +89,15 @@ function GlobeView({ events, selectedEvent, onPointClick }: GlobeViewProps): JSX
       )
     }
   }, [events, selectedEvent, onPointClick])
+
+  // Rotate to the first result when filters produce a new set of events.
+  // Preserves the user's current zoom level — only lat/lng are changed.
+  useEffect(() => {
+    const globe = globeRef.current
+    if (!globe || !focusPoint) return
+    const { altitude } = globe.pointOfView()
+    globe.pointOfView({ lat: focusPoint.lat, lng: focusPoint.lng, altitude }, ROTATION_DURATION_MS)
+  }, [focusPoint])
 
   return <div ref={containerRef} className="h-full w-full" />
 }

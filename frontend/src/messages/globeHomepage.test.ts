@@ -8,7 +8,7 @@ import de from "./de.json"
 // Keys for the Globe Homepage feature (specs/frontend/globe-homepage.md):
 // the "home" namespace covers the page-level loading state, and
 // "eventDetail" covers every label in the side panel / bottom card.
-const EXPECTED_HOME_KEYS = ["loading", "noEvents"].sort()
+const EXPECTED_HOME_KEYS = ["loading", "noEvents", "noEventsFiltered"].sort()
 
 const EXPECTED_EVENT_DETAIL_KEYS = [
   "detailsDescription",
