@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
+import { AddEventButton } from "@/components/globe/AddEventButton"
 import { EventDetailView } from "@/components/events/EventDetailView"
 import { FilterPanel } from "@/components/globe/FilterPanel"
 import { InfoButton } from "@/components/globe/InfoButton"
@@ -81,6 +82,8 @@ export default function Page(): JSX.Element {
       <FilterPanel filters={filters} />
 
       <InfoButton drawerOpen={selectedEvent !== null} />
+
+      <AddEventButton />
 
       <EventDetailView event={selectedEvent} onClose={closeDetail} />
     </main>
