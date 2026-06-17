@@ -205,6 +205,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Globe Event Deep-link (Frontend) | [globe-event-deeplink.md](specs/frontend/globe-event-deeplink.md) | Done |
 | Info Modal — Floating Info Button (Frontend) | [info-modal.md](specs/frontend/info-modal.md) | Done |
 | Globe Event Filters (Frontend) | [globe-filters.md](specs/frontend/globe-filters.md) | Done |
+| Event Submission Wizard (Frontend) | [event-submission-wizard.md](specs/frontend/event-submission-wizard.md) | Done |
 
 ---
 
