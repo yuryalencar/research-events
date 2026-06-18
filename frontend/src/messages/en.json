@@ -177,6 +177,54 @@
       "goHome": "Back to homepage"
     }
   },
+  "deadlines": {
+    "manage": {
+      "typeLabel": "Type",
+      "typePlaceholder": "Select type…",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "e.g. Research track",
+      "dateLabel": "Date",
+      "timeLabel": "Time (HH:MM)",
+      "timePlaceholder": "e.g. 14:30",
+      "timezoneLabel": "Timezone",
+      "timezonePlaceholder": "e.g. UTC",
+      "optionalLabel": "Optional",
+      "requiredLabel": "Required",
+      "removeLabel": "Remove",
+      "loading": "Loading…",
+      "pageTitle": "Manage Deadlines",
+      "backButton": "Back",
+      "existingDeadlinesTitle": "Existing Deadlines",
+      "noDeadlines": "No active deadlines for this event.",
+      "newDeadlinesTitle": "Add New Deadlines",
+      "addDeadlineButton": "+ Add deadline",
+      "contributorTitle": "Your Information",
+      "contributorNameLabel": "Your name",
+      "contributorNamePlaceholder": "e.g. Jane Smith",
+      "contributorEmailLabel": "Your email",
+      "contributorEmailPlaceholder": "e.g. jane@university.edu",
+      "noChangesHint": "No changes to submit yet.",
+      "submitButton": "Submit changes",
+      "submittingButton": "Submitting…",
+      "supersedeButton": "Supersede",
+      "cancelDeadlineButton": "Cancel deadline",
+      "revertButton": "Revert",
+      "undoButton": "Undo",
+      "pendingCancelBadge": "Will be cancelled",
+      "deadlineTypes": {
+        "abstract": "Abstract",
+        "paper": "Paper",
+        "notification": "Notification",
+        "camera_ready": "Camera-ready",
+        "other": "Other"
+      },
+      "success": {
+        "title": "Deadlines updated!",
+        "summary": "{added} added · {updated} updated · {cancelled} cancelled",
+        "goHome": "Back to homepage"
+      }
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Detailed information about this event, including dates, location, website, domain, and deadlines.",
     "tier": "CORE Tier",
@@ -184,7 +232,9 @@
     "location": "Location",
     "website": "Website",
     "domain": "Domain",
+    "deadlinesTitle": "Deadlines",
     "noUpcomingDeadlines": "No upcoming deadlines.",
+    "manageDeadlinesLabel": "Manage deadlines",
     "addedBy": "Added by {name}",
     "updatedBy": "Updated by {name}",
     "optional": "Optional",

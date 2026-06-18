@@ -177,6 +177,54 @@
       "goHome": "Zurück zur Startseite"
     }
   },
+  "deadlines": {
+    "manage": {
+      "typeLabel": "Typ",
+      "typePlaceholder": "Typ auswählen…",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "z.B. Forschungstrack",
+      "dateLabel": "Datum",
+      "timeLabel": "Uhrzeit (HH:MM)",
+      "timePlaceholder": "z.B. 14:30",
+      "timezoneLabel": "Zeitzone",
+      "timezonePlaceholder": "z.B. UTC",
+      "optionalLabel": "Optional",
+      "requiredLabel": "Pflichtfrist",
+      "removeLabel": "Entfernen",
+      "loading": "Wird geladen…",
+      "pageTitle": "Fristen verwalten",
+      "backButton": "Zurück",
+      "existingDeadlinesTitle": "Bestehende Fristen",
+      "noDeadlines": "Keine aktiven Fristen für dieses Event.",
+      "newDeadlinesTitle": "Neue Fristen hinzufügen",
+      "addDeadlineButton": "+ Frist hinzufügen",
+      "contributorTitle": "Deine Informationen",
+      "contributorNameLabel": "Dein Name",
+      "contributorNamePlaceholder": "z.B. Max Mustermann",
+      "contributorEmailLabel": "Deine E-Mail",
+      "contributorEmailPlaceholder": "z.B. max@universitaet.de",
+      "noChangesHint": "Noch keine Änderungen zum Einreichen.",
+      "submitButton": "Änderungen einreichen",
+      "submittingButton": "Wird eingereicht…",
+      "supersedeButton": "Ersetzen",
+      "cancelDeadlineButton": "Frist abbrechen",
+      "revertButton": "Zurücksetzen",
+      "undoButton": "Rückgängig",
+      "pendingCancelBadge": "Wird abgebrochen",
+      "deadlineTypes": {
+        "abstract": "Abstract",
+        "paper": "Beitrag",
+        "notification": "Benachrichtigung",
+        "camera_ready": "Camera-ready",
+        "other": "Sonstiges"
+      },
+      "success": {
+        "title": "Fristen aktualisiert!",
+        "summary": "{added} hinzugefügt · {updated} aktualisiert · {cancelled} abgebrochen",
+        "goHome": "Zurück zur Startseite"
+      }
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Detaillierte Informationen zu dieser Veranstaltung, einschließlich Termine, Ort, Webseite, Fachbereich und Fristen.",
     "tier": "CORE-Einstufung",
@@ -184,7 +232,9 @@
     "location": "Ort",
     "website": "Webseite",
     "domain": "Fachbereich",
+    "deadlinesTitle": "Fristen",
     "noUpcomingDeadlines": "Keine anstehenden Fristen.",
+    "manageDeadlinesLabel": "Fristen verwalten",
     "addedBy": "Hinzugefügt von {name}",
     "updatedBy": "Aktualisiert von {name}",
     "optional": "Optional",

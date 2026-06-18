@@ -180,6 +180,8 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-16 | [Info Modal — Floating Info Button (Frontend)](ai-sessions/2026-06-16-info-modal-feature.md) | Floating `ⓘ` button (bottom-left, `z-40`) opens a Dialog (desktop) / Drawer (mobile) with 6 sections: version, pin legend, submission flow, moderator contact, author credit, open-source invite. New `ui/dialog.tsx` primitive, full i18n (en/pt/es/de), hidden on mobile when event Drawer is open. |
 | 2026-06-16 | [Globe Event Filters (Frontend)](ai-sessions/2026-06-16-globe-filters-feature.md) | Collapsible floating filter panel (top-left): year stepper, domain dropdown, tier chips, country native-select, deadline month dropdown. Draft/applied two-stage state, Apply rotates globe to first result, Reset restores form only, mobile auto-close, locale-aware month names, `noEventsFiltered` empty-state message. `useFilters` + `useEvents` updated. 129 tests. |
 | 2026-06-17 | [Event Submission Wizard (Frontend)](ai-sessions/2026-06-17-event-submission-wizard-frontend.md) | 3-step wizard: Step 1 duplicate check (server-side paginated pending events table), Step 2 event details form + Leaflet map pin, Step 3 optional deadlines. Floating `+` button on globe homepage with custom CSS hover tooltip. `useEventSearch` + `useSubmitWizard` hooks. Fixed Leaflet "Map container already initialized" (async `cancelled` flag), added coordinates for all 195 countries. Full i18n (en/pt/es/de). 152 tests. |
+| 2026-06-18 | [Deadline Management — Frontend Planning](ai-sessions/2026-06-18-deadline-management-frontend-planning.md) | Spec + plan for single-page deadline management (`/events/[slug]/deadlines`): add/supersede/cancel in one batch, pencil icon in event drawer/sheet, sessionStorage for event state, parallel API submission, same design language as submission wizard. Phases 0–2 complete; Phase 3 (Red) is next. |
+| 2026-06-19 | [Deadline Management — Frontend Implementation](ai-sessions/2026-06-19-deadline-management-frontend-implementation.md) | Full implementation of `/events/[slug]/deadlines`: `useDeadlineManage` hook (58 tests), `DeadlineCard` (3 states), `AddDeadlineCard` (2-row layout, Required checkbox), `DeadlineManagePage` (sessionStorage loader + content split), supersede visualization in drawer (strikethrough → new date). 210 tests. |
 
 ## Specs
 
@@ -206,6 +208,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Info Modal — Floating Info Button (Frontend) | [info-modal.md](specs/frontend/info-modal.md) | Done |
 | Globe Event Filters (Frontend) | [globe-filters.md](specs/frontend/globe-filters.md) | Done |
 | Event Submission Wizard (Frontend) | [event-submission-wizard.md](specs/frontend/event-submission-wizard.md) | Done |
+| Deadline Management (Frontend) | [deadline-management.md](specs/frontend/deadline-management.md) | Done |
 
 ---
 

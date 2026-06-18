@@ -1,7 +1,8 @@
 "use client"
 
 import type { JSX } from "react"
-import { useTranslations } from "next-intl"
+import { useTranslations, useLocale } from "next-intl"
+import { useRouter } from "next/navigation"
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer"
@@ -22,6 +23,8 @@ interface EventDetailViewProps {
 // card below md (see specs/frontend/globe-homepage.md — "Responsive layout").
 const DESKTOP_QUERY = "(min-width: 768px)"
 
+const SESSION_KEY = "deadline_management_event"
+
 // --- Component ---
 
 // EventDetailView shows the selected event's details — as a side panel
@@ -30,6 +33,8 @@ const DESKTOP_QUERY = "(min-width: 768px)"
 // interaction.
 function EventDetailView({ event, onClose }: EventDetailViewProps): JSX.Element | null {
   const t = useTranslations("eventDetail")
+  const locale = useLocale()
+  const router = useRouter()
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
 
   if (event === null) {
@@ -38,6 +43,11 @@ function EventDetailView({ event, onClose }: EventDetailViewProps): JSX.Element 
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) onClose()
+  }
+
+  const handleManageDeadlines = (ev: EventListItem): void => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(ev))
+    router.push(`/${locale}/events/${ev.slug}/deadlines`)
   }
 
   if (isDesktop) {
@@ -50,7 +60,7 @@ function EventDetailView({ event, onClose }: EventDetailViewProps): JSX.Element 
             </SheetTitle>
             <SheetDescription className="sr-only">{t("detailsDescription")}</SheetDescription>
           </SheetHeader>
-          <EventDetailContent event={event} />
+          <EventDetailContent event={event} onManageDeadlines={handleManageDeadlines} />
         </SheetContent>
       </Sheet>
     )
@@ -65,7 +75,7 @@ function EventDetailView({ event, onClose }: EventDetailViewProps): JSX.Element 
           </DrawerTitle>
           <DrawerDescription className="sr-only">{t("detailsDescription")}</DrawerDescription>
         </DrawerHeader>
-        <EventDetailContent event={event} />
+        <EventDetailContent event={event} onManageDeadlines={handleManageDeadlines} />
       </DrawerContent>
     </Drawer>
   )

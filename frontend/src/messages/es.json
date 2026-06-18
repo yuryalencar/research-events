@@ -177,6 +177,54 @@
       "goHome": "Volver a la página de inicio"
     }
   },
+  "deadlines": {
+    "manage": {
+      "typeLabel": "Tipo",
+      "typePlaceholder": "Selecciona el tipo…",
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "ej.: Pista de investigación",
+      "dateLabel": "Fecha",
+      "timeLabel": "Hora (HH:MM)",
+      "timePlaceholder": "ej.: 14:30",
+      "timezoneLabel": "Zona horaria",
+      "timezonePlaceholder": "ej.: UTC",
+      "optionalLabel": "Opcional",
+      "requiredLabel": "Obligatorio",
+      "removeLabel": "Eliminar",
+      "loading": "Cargando…",
+      "pageTitle": "Gestionar Plazos",
+      "backButton": "Volver",
+      "existingDeadlinesTitle": "Plazos Existentes",
+      "noDeadlines": "No hay plazos activos para este evento.",
+      "newDeadlinesTitle": "Agregar Nuevos Plazos",
+      "addDeadlineButton": "+ Agregar plazo",
+      "contributorTitle": "Tu Información",
+      "contributorNameLabel": "Tu nombre",
+      "contributorNamePlaceholder": "ej.: Ana García",
+      "contributorEmailLabel": "Tu correo electrónico",
+      "contributorEmailPlaceholder": "ej.: ana@universidad.edu",
+      "noChangesHint": "Aún no hay cambios para enviar.",
+      "submitButton": "Enviar cambios",
+      "submittingButton": "Enviando…",
+      "supersedeButton": "Reemplazar",
+      "cancelDeadlineButton": "Cancelar plazo",
+      "revertButton": "Revertir",
+      "undoButton": "Deshacer",
+      "pendingCancelBadge": "Se cancelará",
+      "deadlineTypes": {
+        "abstract": "Resumen",
+        "paper": "Artículo",
+        "notification": "Notificación",
+        "camera_ready": "Versión final",
+        "other": "Otro"
+      },
+      "success": {
+        "title": "¡Plazos actualizados!",
+        "summary": "{added} agregado(s) · {updated} actualizado(s) · {cancelled} cancelado(s)",
+        "goHome": "Volver a la página de inicio"
+      }
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Información detallada sobre este evento, incluyendo fechas, ubicación, sitio web, área y plazos.",
     "tier": "Clasificación CORE",
@@ -184,7 +232,9 @@
     "location": "Ubicación",
     "website": "Sitio web",
     "domain": "Área",
+    "deadlinesTitle": "Plazos",
     "noUpcomingDeadlines": "No hay plazos próximos.",
+    "manageDeadlinesLabel": "Gestionar plazos",
     "addedBy": "Agregado por {name}",
     "updatedBy": "Actualizado por {name}",
     "optional": "Opcional",

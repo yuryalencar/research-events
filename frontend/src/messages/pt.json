@@ -177,6 +177,54 @@
       "goHome": "Voltar para a página inicial"
     }
   },
+  "deadlines": {
+    "manage": {
+      "typeLabel": "Tipo",
+      "typePlaceholder": "Selecione o tipo…",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "ex.: Trilha de pesquisa",
+      "dateLabel": "Data",
+      "timeLabel": "Hora (HH:MM)",
+      "timePlaceholder": "ex.: 14:30",
+      "timezoneLabel": "Fuso horário",
+      "timezonePlaceholder": "ex.: UTC",
+      "optionalLabel": "Opcional",
+      "requiredLabel": "Obrigatório",
+      "removeLabel": "Remover",
+      "loading": "Carregando…",
+      "pageTitle": "Gerenciar Prazos",
+      "backButton": "Voltar",
+      "existingDeadlinesTitle": "Prazos Existentes",
+      "noDeadlines": "Nenhum prazo ativo para este evento.",
+      "newDeadlinesTitle": "Adicionar Novos Prazos",
+      "addDeadlineButton": "+ Adicionar prazo",
+      "contributorTitle": "Suas Informações",
+      "contributorNameLabel": "Seu nome",
+      "contributorNamePlaceholder": "ex.: João Silva",
+      "contributorEmailLabel": "Seu e-mail",
+      "contributorEmailPlaceholder": "ex.: joao@universidade.edu",
+      "noChangesHint": "Nenhuma alteração para enviar ainda.",
+      "submitButton": "Enviar alterações",
+      "submittingButton": "Enviando…",
+      "supersedeButton": "Substituir",
+      "cancelDeadlineButton": "Cancelar prazo",
+      "revertButton": "Reverter",
+      "undoButton": "Desfazer",
+      "pendingCancelBadge": "Será cancelado",
+      "deadlineTypes": {
+        "abstract": "Resumo",
+        "paper": "Artigo",
+        "notification": "Notificação",
+        "camera_ready": "Versão final",
+        "other": "Outro"
+      },
+      "success": {
+        "title": "Prazos atualizados!",
+        "summary": "{added} adicionado(s) · {updated} atualizado(s) · {cancelled} cancelado(s)",
+        "goHome": "Voltar para a página inicial"
+      }
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Informações detalhadas sobre este evento, incluindo datas, local, site, área e prazos.",
     "tier": "Classificação CORE",
@@ -184,7 +232,9 @@
     "location": "Local",
     "website": "Site",
     "domain": "Área",
+    "deadlinesTitle": "Prazos",
     "noUpcomingDeadlines": "Nenhum prazo futuro.",
+    "manageDeadlinesLabel": "Gerenciar prazos",
     "addedBy": "Adicionado por {name}",
     "updatedBy": "Atualizado por {name}",
     "optional": "Opcional",
