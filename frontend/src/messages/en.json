@@ -243,6 +243,24 @@
       "welcomeHeading": "Welcome, {name}",
       "loading": "Loading…",
       "logoutButton": "Sign out"
+    },
+    "reviewDashboard": {
+      "statusLabel": "Status",
+      "statusPending": "Pending",
+      "statusApproved": "Approved",
+      "statusRejected": "Rejected",
+      "tierLabel": "Tier",
+      "tierAll": "All tiers",
+      "yearLabel": "Year",
+      "applyButton": "Apply",
+      "reviewButton": "Review",
+      "cannotReview": "You can't review this submission",
+      "pageLabel": "Page {page} of {totalPages} ({total} events)",
+      "prevButton": "← Prev",
+      "nextButton": "Next →",
+      "loading": "Loading events…",
+      "empty": "No events match the current filters.",
+      "errorLoad": "Failed to load events. Try again."
     }
   },
   "eventDetail": {

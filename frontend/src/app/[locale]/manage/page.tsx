@@ -72,7 +72,7 @@ export default function ManageLoginPage(): JSX.Element {
 
       localStorage.setItem(
         "manage_user",
-        JSON.stringify({ name: claims.name, role: claims.role, email: claims.email }),
+        JSON.stringify({ id: parseInt(claims.sub, 10), name: claims.name, role: claims.role, email: claims.email }),
       )
       router.push(`/${locale}/manage/${claims.role}`)
     } catch (err: unknown) {

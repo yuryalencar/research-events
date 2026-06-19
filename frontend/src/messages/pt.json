@@ -243,6 +243,24 @@
       "welcomeHeading": "Bem-vindo(a), {name}",
       "loading": "Carregando…",
       "logoutButton": "Sair"
+    },
+    "reviewDashboard": {
+      "statusLabel": "Status",
+      "statusPending": "Pendente",
+      "statusApproved": "Aprovado",
+      "statusRejected": "Rejeitado",
+      "tierLabel": "Classificação",
+      "tierAll": "Todas as classificações",
+      "yearLabel": "Ano",
+      "applyButton": "Aplicar",
+      "reviewButton": "Revisar",
+      "cannotReview": "Você não pode revisar esta submissão",
+      "pageLabel": "Página {page} de {totalPages} ({total} eventos)",
+      "prevButton": "← Anterior",
+      "nextButton": "Próxima →",
+      "loading": "Carregando eventos…",
+      "empty": "Nenhum evento corresponde aos filtros atuais.",
+      "errorLoad": "Falha ao carregar eventos. Tente novamente."
     }
   },
   "eventDetail": {

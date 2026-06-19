@@ -243,6 +243,24 @@
       "welcomeHeading": "Bienvenido/a, {name}",
       "loading": "Cargando…",
       "logoutButton": "Cerrar sesión"
+    },
+    "reviewDashboard": {
+      "statusLabel": "Estado",
+      "statusPending": "Pendiente",
+      "statusApproved": "Aprobado",
+      "statusRejected": "Rechazado",
+      "tierLabel": "Nivel",
+      "tierAll": "Todos los niveles",
+      "yearLabel": "Año",
+      "applyButton": "Aplicar",
+      "reviewButton": "Revisar",
+      "cannotReview": "No puedes revisar esta solicitud",
+      "pageLabel": "Página {page} de {totalPages} ({total} eventos)",
+      "prevButton": "← Anterior",
+      "nextButton": "Siguiente →",
+      "loading": "Cargando eventos…",
+      "empty": "Ningún evento coincide con los filtros actuales.",
+      "errorLoad": "Error al cargar eventos. Inténtalo de nuevo."
     }
   },
   "eventDetail": {

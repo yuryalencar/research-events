@@ -243,6 +243,24 @@
       "welcomeHeading": "Willkommen, {name}",
       "loading": "Wird geladen…",
       "logoutButton": "Abmelden"
+    },
+    "reviewDashboard": {
+      "statusLabel": "Status",
+      "statusPending": "Ausstehend",
+      "statusApproved": "Genehmigt",
+      "statusRejected": "Abgelehnt",
+      "tierLabel": "Stufe",
+      "tierAll": "Alle Stufen",
+      "yearLabel": "Jahr",
+      "applyButton": "Anwenden",
+      "reviewButton": "Prüfen",
+      "cannotReview": "Du kannst diese Einreichung nicht prüfen",
+      "pageLabel": "Seite {page} von {totalPages} ({total} Ereignisse)",
+      "prevButton": "← Zurück",
+      "nextButton": "Weiter →",
+      "loading": "Ereignisse werden geladen…",
+      "empty": "Keine Ereignisse entsprechen den aktuellen Filtern.",
+      "errorLoad": "Ereignisse konnten nicht geladen werden. Erneut versuchen."
     }
   },
   "eventDetail": {
