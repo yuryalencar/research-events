@@ -225,6 +225,26 @@
       }
     }
   },
+  "manage": {
+    "title": "ReSEARCH Manage",
+    "login": {
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "submitButton": "Sign in",
+      "emailRequired": "Email is required",
+      "passwordRequired": "Password is required"
+    },
+    "moderatorBanner": {
+      "title": "Want to become a moderator?",
+      "description": "Help review event submissions by joining our team.",
+      "emailLabel": "Send us an email"
+    },
+    "dashboard": {
+      "welcomeHeading": "Welcome, {name}",
+      "loading": "Loading…",
+      "logoutButton": "Sign out"
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Detailed information about this event, including dates, location, website, domain, and deadlines.",
     "tier": "CORE Tier",

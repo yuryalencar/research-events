@@ -5,10 +5,13 @@ import type { LoginInput, LoginResult, RefreshTokenResult } from "@/types/api"
 
 // login authenticates an admin/moderator. Public request — the backend sets
 // the access_token/refresh_token cookies on the response.
+// credentials: "include" is required so the browser accepts and stores the
+// HTTP-only cookies from a cross-origin response (dev: :3000 → :8080).
 async function login(input: LoginInput): Promise<LoginResult> {
   return apiRequest<LoginResult>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify(input),
+    credentials: "include",
   })
 }
 

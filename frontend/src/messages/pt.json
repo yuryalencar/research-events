@@ -225,6 +225,26 @@
       }
     }
   },
+  "manage": {
+    "title": "ReSEARCH Manage",
+    "login": {
+      "emailLabel": "E-mail",
+      "passwordLabel": "Senha",
+      "submitButton": "Entrar",
+      "emailRequired": "E-mail é obrigatório",
+      "passwordRequired": "Senha é obrigatória"
+    },
+    "moderatorBanner": {
+      "title": "Quer se tornar um moderador?",
+      "description": "Ajude a revisar submissões de eventos entrando para nossa equipe.",
+      "emailLabel": "Envie-nos um e-mail"
+    },
+    "dashboard": {
+      "welcomeHeading": "Bem-vindo(a), {name}",
+      "loading": "Carregando…",
+      "logoutButton": "Sair"
+    }
+  },
   "eventDetail": {
     "detailsDescription": "Informações detalhadas sobre este evento, incluindo datas, local, site, área e prazos.",
     "tier": "Classificação CORE",

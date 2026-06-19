@@ -25,6 +25,7 @@ describe("login", () => {
     expect(apiRequest).toHaveBeenCalledWith("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
+      credentials: "include",
     })
     expect(result).toEqual(authResult)
   })

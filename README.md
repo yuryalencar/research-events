@@ -182,6 +182,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-17 | [Event Submission Wizard (Frontend)](ai-sessions/2026-06-17-event-submission-wizard-frontend.md) | 3-step wizard: Step 1 duplicate check (server-side paginated pending events table), Step 2 event details form + Leaflet map pin, Step 3 optional deadlines. Floating `+` button on globe homepage with custom CSS hover tooltip. `useEventSearch` + `useSubmitWizard` hooks. Fixed Leaflet "Map container already initialized" (async `cancelled` flag), added coordinates for all 195 countries. Full i18n (en/pt/es/de). 152 tests. |
 | 2026-06-18 | [Deadline Management — Frontend Planning](ai-sessions/2026-06-18-deadline-management-frontend-planning.md) | Spec + plan for single-page deadline management (`/events/[slug]/deadlines`): add/supersede/cancel in one batch, pencil icon in event drawer/sheet, sessionStorage for event state, parallel API submission, same design language as submission wizard. Phases 0–2 complete; Phase 3 (Red) is next. |
 | 2026-06-19 | [Deadline Management — Frontend Implementation](ai-sessions/2026-06-19-deadline-management-frontend-implementation.md) | Full implementation of `/events/[slug]/deadlines`: `useDeadlineManage` hook (58 tests), `DeadlineCard` (3 states), `AddDeadlineCard` (2-row layout, Required checkbox), `DeadlineManagePage` (sessionStorage loader + content split), supersede visualization in drawer (strikethrough → new date). 210 tests. |
+| 2026-06-19 | [Management Portal — Frontend](ai-sessions/2026-06-19-manage-portal-frontend.md) | Hidden `/manage` login page (email/password + eye toggle, moderator banner), JWT decoded client-side via `atob()`, localStorage session persistence, role-based redirect to `/manage/admin` or `/manage/moderator` welcome dashboards. Fixed `credentials: "include"` on login request. 215 tests. |
 
 ## Specs
 
@@ -209,6 +210,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Globe Event Filters (Frontend) | [globe-filters.md](specs/frontend/globe-filters.md) | Done |
 | Event Submission Wizard (Frontend) | [event-submission-wizard.md](specs/frontend/event-submission-wizard.md) | Done |
 | Deadline Management (Frontend) | [deadline-management.md](specs/frontend/deadline-management.md) | Done |
+| Management Portal (Frontend) | [manage-portal.md](specs/frontend/manage-portal.md) | Done |
 
 ---
 
