@@ -261,6 +261,77 @@
       "loading": "Carregando eventos…",
       "empty": "Nenhum evento corresponde aos filtros atuais.",
       "errorLoad": "Falha ao carregar eventos. Tente novamente."
+    },
+    "review": {
+      "stepIndicator": "Passo {current} de {total}",
+      "backToDashboard": "← Voltar ao Painel",
+      "step1Title": "Editar Detalhes do Evento",
+      "step2Title": "Decisão de Revisão",
+      "step3Title": "Gerenciar Prazos",
+      "statusBadge": {
+        "pending": "Pendente",
+        "approved": "Aprovado",
+        "rejected": "Rejeitado"
+      },
+      "fields": {
+        "nameLabel": "Nome do evento",
+        "countryLabel": "País",
+        "cityLabel": "Cidade",
+        "startDateLabel": "Data de início",
+        "endDateLabel": "Data de término",
+        "websiteLabel": "URL do site",
+        "domainLabel": "Domínio",
+        "tierLabel": "Classificação",
+        "locationLabel": "Localização",
+        "locationHint": "Arraste o pino para definir o local do evento"
+      },
+      "errors": {
+        "name": "O nome do evento é obrigatório",
+        "country": "O país é obrigatório",
+        "city": "A cidade é obrigatória",
+        "startDate": "A data de início é obrigatória",
+        "endDate": "A data de término é obrigatória",
+        "websiteUrl": "A URL do site é obrigatória"
+      },
+      "currentStatusLabel": "Status atual",
+      "nextButton": "Próximo →",
+      "backButton": "← Voltar",
+      "approveButton": "Aprovar",
+      "rejectButton": "Rejeitar",
+      "reviewDeadlinesButton": "Revisar Prazos →",
+      "reviewDeadlinesDisabled": "Aprove o evento primeiro para gerenciar seus prazos",
+      "approveModal": {
+        "title": "Aprovar este evento?",
+        "description": "O evento será publicado e visível no globo.",
+        "noteLabel": "Nota (opcional)",
+        "notePlaceholder": "Adicione uma nota para o registro…",
+        "confirmButton": "Confirmar Aprovação",
+        "cancelButton": "Cancelar"
+      },
+      "rejectModal": {
+        "title": "Rejeitar este evento?",
+        "description": "O evento será marcado como rejeitado. Forneça um motivo.",
+        "reasonLabel": "Motivo (obrigatório)",
+        "reasonPlaceholder": "Explique por que este evento está sendo rejeitado…",
+        "confirmButton": "Confirmar Rejeição",
+        "cancelButton": "Cancelar"
+      },
+      "bannerError": "Algo deu errado. Por favor, tente novamente.",
+      "success": {
+        "approveTitle": "Evento aprovado!",
+        "approveDescription": "O evento está no ar e visível no globo.",
+        "rejectTitle": "Evento rejeitado",
+        "rejectDescription": "O evento foi rejeitado.",
+        "reasonLabel": "Motivo",
+        "statusLabel": "Status",
+        "manageDeadlinesButton": "Gerenciar Prazos",
+        "backToDashboardButton": "Voltar ao Painel"
+      },
+      "step3": {
+        "conferenceLink": "Site da conferência",
+        "backButton": "← Voltar para Revisão",
+        "doneButton": "Concluído →"
+      }
     }
   },
   "eventDetail": {

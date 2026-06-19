@@ -261,6 +261,77 @@
       "loading": "Loading events…",
       "empty": "No events match the current filters.",
       "errorLoad": "Failed to load events. Try again."
+    },
+    "review": {
+      "stepIndicator": "Step {current} of {total}",
+      "backToDashboard": "← Back to Dashboard",
+      "step1Title": "Edit Event Details",
+      "step2Title": "Review Decision",
+      "step3Title": "Manage Deadlines",
+      "statusBadge": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "fields": {
+        "nameLabel": "Event name",
+        "countryLabel": "Country",
+        "cityLabel": "City",
+        "startDateLabel": "Start date",
+        "endDateLabel": "End date",
+        "websiteLabel": "Website URL",
+        "domainLabel": "Domain",
+        "tierLabel": "Tier",
+        "locationLabel": "Location",
+        "locationHint": "Drag the pin to set the event location"
+      },
+      "errors": {
+        "name": "Event name is required",
+        "country": "Country is required",
+        "city": "City is required",
+        "startDate": "Start date is required",
+        "endDate": "End date is required",
+        "websiteUrl": "Website URL is required"
+      },
+      "currentStatusLabel": "Current status",
+      "nextButton": "Next →",
+      "backButton": "← Back",
+      "approveButton": "Approve",
+      "rejectButton": "Reject",
+      "reviewDeadlinesButton": "Review Deadlines →",
+      "reviewDeadlinesDisabled": "Approve the event first to manage its deadlines",
+      "approveModal": {
+        "title": "Approve this event?",
+        "description": "The event will be published and visible on the globe.",
+        "noteLabel": "Note (optional)",
+        "notePlaceholder": "Add a note for the record…",
+        "confirmButton": "Confirm Approval",
+        "cancelButton": "Cancel"
+      },
+      "rejectModal": {
+        "title": "Reject this event?",
+        "description": "The event will be marked as rejected. Please provide a reason.",
+        "reasonLabel": "Reason (required)",
+        "reasonPlaceholder": "Explain why this event is being rejected…",
+        "confirmButton": "Confirm Rejection",
+        "cancelButton": "Cancel"
+      },
+      "bannerError": "Something went wrong. Please try again.",
+      "success": {
+        "approveTitle": "Event approved!",
+        "approveDescription": "The event is now live and visible on the globe.",
+        "rejectTitle": "Event rejected",
+        "rejectDescription": "The event has been rejected.",
+        "reasonLabel": "Reason",
+        "statusLabel": "Status",
+        "manageDeadlinesButton": "Manage Deadlines",
+        "backToDashboardButton": "Back to Dashboard"
+      },
+      "step3": {
+        "conferenceLink": "Conference website",
+        "backButton": "← Back to Review",
+        "doneButton": "Done →"
+      }
     }
   },
   "eventDetail": {

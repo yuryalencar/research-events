@@ -1,7 +1,7 @@
 "use client"
 
 import type { JSX } from "react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 
 import { isOwnEvent } from "@/hooks/useReviewEvents"
@@ -20,12 +20,18 @@ interface EventReviewCardProps {
 
 function EventReviewCard({ event, role, userId, locale }: EventReviewCardProps): JSX.Element {
   const t = useTranslations("manage.reviewDashboard")
+  const router = useRouter()
 
   // Moderators cannot review events they submitted themselves.
   // Admins always see the normal card variant.
   const blocked = role === "moderator" && isOwnEvent(event, userId)
 
   const reviewHref = `/${locale}/manage/${role}/events/${event.slug}/review`
+
+  function handleReview(): void {
+    sessionStorage.setItem("manage_review_event", JSON.stringify(event))
+    router.push(reviewHref)
+  }
 
   if (blocked) {
     return (
@@ -46,12 +52,12 @@ function EventReviewCard({ event, role, userId, locale }: EventReviewCardProps):
       >
         {event.name}
       </a>
-      <Link
-        href={reviewHref}
+      <button
+        onClick={handleReview}
         className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
       >
         {t("reviewButton")}
-      </Link>
+      </button>
     </div>
   )
 }

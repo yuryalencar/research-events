@@ -261,6 +261,77 @@
       "loading": "Ereignisse werden geladen…",
       "empty": "Keine Ereignisse entsprechen den aktuellen Filtern.",
       "errorLoad": "Ereignisse konnten nicht geladen werden. Erneut versuchen."
+    },
+    "review": {
+      "stepIndicator": "Schritt {current} von {total}",
+      "backToDashboard": "← Zurück zum Dashboard",
+      "step1Title": "Veranstaltungsdetails bearbeiten",
+      "step2Title": "Prüfentscheidung",
+      "step3Title": "Fristen verwalten",
+      "statusBadge": {
+        "pending": "Ausstehend",
+        "approved": "Genehmigt",
+        "rejected": "Abgelehnt"
+      },
+      "fields": {
+        "nameLabel": "Veranstaltungsname",
+        "countryLabel": "Land",
+        "cityLabel": "Stadt",
+        "startDateLabel": "Startdatum",
+        "endDateLabel": "Enddatum",
+        "websiteLabel": "Website-URL",
+        "domainLabel": "Bereich",
+        "tierLabel": "Stufe",
+        "locationLabel": "Standort",
+        "locationHint": "Ziehe den Pin, um den Veranstaltungsort festzulegen"
+      },
+      "errors": {
+        "name": "Veranstaltungsname ist erforderlich",
+        "country": "Land ist erforderlich",
+        "city": "Stadt ist erforderlich",
+        "startDate": "Startdatum ist erforderlich",
+        "endDate": "Enddatum ist erforderlich",
+        "websiteUrl": "Website-URL ist erforderlich"
+      },
+      "currentStatusLabel": "Aktueller Status",
+      "nextButton": "Weiter →",
+      "backButton": "← Zurück",
+      "approveButton": "Genehmigen",
+      "rejectButton": "Ablehnen",
+      "reviewDeadlinesButton": "Fristen prüfen →",
+      "reviewDeadlinesDisabled": "Genehmige die Veranstaltung zuerst, um Fristen zu verwalten",
+      "approveModal": {
+        "title": "Diese Veranstaltung genehmigen?",
+        "description": "Die Veranstaltung wird veröffentlicht und auf dem Globus sichtbar.",
+        "noteLabel": "Notiz (optional)",
+        "notePlaceholder": "Füge eine Notiz für das Protokoll hinzu…",
+        "confirmButton": "Genehmigung bestätigen",
+        "cancelButton": "Abbrechen"
+      },
+      "rejectModal": {
+        "title": "Diese Veranstaltung ablehnen?",
+        "description": "Die Veranstaltung wird als abgelehnt markiert. Bitte gib einen Grund an.",
+        "reasonLabel": "Grund (erforderlich)",
+        "reasonPlaceholder": "Erkläre, warum diese Veranstaltung abgelehnt wird…",
+        "confirmButton": "Ablehnung bestätigen",
+        "cancelButton": "Abbrechen"
+      },
+      "bannerError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+      "success": {
+        "approveTitle": "Veranstaltung genehmigt!",
+        "approveDescription": "Die Veranstaltung ist jetzt live und auf dem Globus sichtbar.",
+        "rejectTitle": "Veranstaltung abgelehnt",
+        "rejectDescription": "Die Veranstaltung wurde abgelehnt.",
+        "reasonLabel": "Grund",
+        "statusLabel": "Status",
+        "manageDeadlinesButton": "Fristen verwalten",
+        "backToDashboardButton": "Zurück zum Dashboard"
+      },
+      "step3": {
+        "conferenceLink": "Konferenz-Website",
+        "backButton": "← Zurück zur Prüfung",
+        "doneButton": "Fertig →"
+      }
     }
   },
   "eventDetail": {

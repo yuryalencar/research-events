@@ -8,11 +8,12 @@ import type { WizardStep } from "@/hooks/useSubmitWizard"
 interface StepIndicatorProps {
   currentStep: WizardStep
   totalSteps: number
+  label?: string
 }
 
 // --- Component ---
 
-function StepIndicator({ currentStep, totalSteps }: StepIndicatorProps): JSX.Element {
+function StepIndicator({ currentStep, totalSteps, label }: StepIndicatorProps): JSX.Element {
   const t = useTranslations("submit")
 
   return (
@@ -49,7 +50,7 @@ function StepIndicator({ currentStep, totalSteps }: StepIndicatorProps): JSX.Ele
         )
       })}
       <span className="ml-1 text-sm text-muted-foreground">
-        {t("stepIndicator", { current: currentStep, total: totalSteps })}
+        {label ?? t("stepIndicator", { current: currentStep, total: totalSteps })}
       </span>
     </div>
   )

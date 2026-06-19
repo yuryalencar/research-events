@@ -40,6 +40,13 @@ function LocationPicker({ latitude, longitude, country, onChange }: LocationPick
     onChangeRef.current = onChange
   }, [onChange])
 
+  // Mirror lat/lng into a ref so the init effect can read the initial values
+  // after the async import resolves — without closing over stale props.
+  const latLngRef = useRef({ latitude, longitude })
+  useEffect(() => {
+    latLngRef.current = { latitude, longitude }
+  }, [latitude, longitude])
+
   // Initialise the map once on mount. The returned cleanup removes it so
   // React StrictMode's double-mount does not create two overlapping maps.
   //
@@ -70,13 +77,35 @@ function LocationPicker({ latitude, longitude, country, onChange }: LocationPick
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       })
 
-      map = L.map(containerRef.current).setView([20, 0], 2)
+      const { latitude: initLat, longitude: initLng } = latLngRef.current
+      const initialView: [number, number] =
+        initLat !== null && initLng !== null ? [initLat, initLng] : [20, 0]
+      const initialZoom = initLat !== null ? 6 : 2
+
+      map = L.map(containerRef.current).setView(initialView, initialZoom)
       mapRef.current = map
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // CartoDB Voyager renders all place labels in English regardless of region
+      // (standard OSM tiles use local script, e.g. 東京 for Tokyo).
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
         attribution:
-          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 20,
       }).addTo(map)
+
+      // Place the marker immediately when lat/lng are already known at init time
+      // (e.g. review form pre-filled from an existing event). The lat/lng sync
+      // effect that also runs on mount fires before this async block resolves, so
+      // mapRef.current is still null when it checks — this handles that gap.
+      if (initLat !== null && initLng !== null) {
+        const m = L.marker([initLat, initLng], { draggable: true }).addTo(map)
+        m.on("dragend", () => {
+          const pos = m.getLatLng()
+          onChangeRef.current(pos.lat, pos.lng)
+        })
+        markerRef.current = m
+      }
 
       map.on("click", (e) => {
         const { lat, lng } = e.latlng
