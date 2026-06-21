@@ -76,6 +76,10 @@ function GlobeView({ events, selectedEvent, onPointClick, focusPoint }: GlobeVie
         const event = point as EventListItem
         return getPinColor(event.id, event.end_date, selectedId, new Date())
       })
+      .pointLabel((point) => {
+        const event = point as EventListItem
+        return `${event.name} (${event.year})`
+      })
       .pointRadius((point) => ((point as EventListItem).id === selectedId ? SELECTED_PIN_RADIUS : PIN_RADIUS))
       .onPointClick((point) => onPointClick(point as EventListItem))
 

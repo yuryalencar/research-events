@@ -334,6 +334,18 @@
       }
     }
   },
+  "viewToggle": {
+    "tableModeTooltip": "Tabellenansicht",
+    "globeModeTooltip": "Globusansicht",
+    "tableUnavailableToast": "Die Tabellenansicht ist auf kleinen Bildschirmen nicht verfügbar"
+  },
+  "eventTable": {
+    "noUpcomingDeadlines": "Keine anstehenden Fristen",
+    "manageDeadlines": "Fristen verwalten",
+    "expand": "Veranstaltungsdetails erweitern",
+    "collapse": "Veranstaltungsdetails einklappen",
+    "nextDeadline": "Nächste Frist"
+  },
   "eventDetail": {
     "detailsDescription": "Detaillierte Informationen zu dieser Veranstaltung, einschließlich Termine, Ort, Webseite, Fachbereich und Fristen.",
     "tier": "CORE-Einstufung",

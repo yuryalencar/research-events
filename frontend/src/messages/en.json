@@ -334,6 +334,18 @@
       }
     }
   },
+  "viewToggle": {
+    "tableModeTooltip": "Table mode",
+    "globeModeTooltip": "Globe mode",
+    "tableUnavailableToast": "Table view is not available on small screens"
+  },
+  "eventTable": {
+    "noUpcomingDeadlines": "No upcoming deadlines",
+    "manageDeadlines": "Manage deadlines",
+    "expand": "Expand event details",
+    "collapse": "Collapse event details",
+    "nextDeadline": "Next deadline"
+  },
   "eventDetail": {
     "detailsDescription": "Detailed information about this event, including dates, location, website, domain, and deadlines.",
     "tier": "CORE Tier",

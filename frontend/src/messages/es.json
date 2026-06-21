@@ -334,6 +334,18 @@
       }
     }
   },
+  "viewToggle": {
+    "tableModeTooltip": "Modo tabla",
+    "globeModeTooltip": "Modo globo",
+    "tableUnavailableToast": "El modo tabla no está disponible en pantallas pequeñas"
+  },
+  "eventTable": {
+    "noUpcomingDeadlines": "Sin plazos próximos",
+    "manageDeadlines": "Gestionar plazos",
+    "expand": "Expandir detalles del evento",
+    "collapse": "Contraer detalles del evento",
+    "nextDeadline": "Próximo plazo"
+  },
   "eventDetail": {
     "detailsDescription": "Información detallada sobre este evento, incluyendo fechas, ubicación, sitio web, área y plazos.",
     "tier": "Clasificación CORE",
