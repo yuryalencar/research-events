@@ -30,6 +30,23 @@ func NewUserHandler(userRepo repository.UserRepository, logger *slog.Logger) *Us
 
 // --- Public methods ---
 
+// Me handles GET /api/v1/users/me.
+// Returns the authenticated user's profile from the JWT context — no additional DB query.
+func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
+	authUser, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication token is missing")
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, "SESSION_VALID", map[string]any{
+		"id":    authUser.ID,
+		"name":  authUser.Name,
+		"email": authUser.Email,
+		"role":  authUser.Role,
+	})
+}
+
 // UpdatePassword handles PATCH /api/v1/users/me/password.
 // Requires a valid JWT (RequireAuth middleware must run before this handler).
 // Validation order matches the spec:

@@ -5,10 +5,11 @@
   "errors": {
     "VALIDATION_ERROR": "Revisa los datos ingresados e inténtalo de nuevo.",
     "UNAUTHORIZED": "Necesitas iniciar sesión para hacer eso.",
-    "TOKEN_MISSING": "Necesitas iniciar sesión para hacer eso.",
+    "TOKEN_MISSING": "No se encontró ninguna sesión activa. Por favor, inicia sesión para continuar.",
     "TOKEN_EXPIRED": "Tu sesión ha expirado. Inicia sesión de nuevo.",
     "TOKEN_INVALID": "Tu sesión no es válida. Inicia sesión de nuevo.",
     "INVALID_CREDENTIALS": "Correo electrónico o contraseña incorrectos.",
+    "INVALID_CURRENT_PASSWORD": "La contraseña actual es incorrecta.",
     "ACCOUNT_LOCKED": "Esta cuenta está bloqueada. Contacta a un administrador.",
     "REFRESH_TOKEN_MISSING": "Tu sesión ha expirado. Inicia sesión de nuevo.",
     "REFRESH_TOKEN_INVALID": "Tu sesión ha expirado. Inicia sesión de nuevo.",
@@ -242,7 +243,31 @@
     "dashboard": {
       "welcomeHeading": "Bienvenido/a, {name}",
       "loading": "Cargando…",
-      "logoutButton": "Cerrar sesión"
+      "logoutButton": "Cerrar sesión",
+      "updatePasswordMenuItem": "Actualizar contraseña"
+    },
+    "updatePassword": {
+      "title": "Actualizar Contraseña",
+      "currentPasswordLabel": "Contraseña actual",
+      "newPasswordLabel": "Nueva contraseña",
+      "confirmPasswordLabel": "Confirmar nueva contraseña",
+      "showPassword": "Mostrar contraseña",
+      "hidePassword": "Ocultar contraseña",
+      "saveButton": "Guardar",
+      "savingButton": "Guardando…",
+      "complexity": {
+        "minLength": "Al menos 8 caracteres",
+        "hasUppercase": "Al menos una letra mayúscula (A–Z)",
+        "hasLowercase": "Al menos una letra minúscula (a–z)",
+        "hasSpecial": "Al menos un carácter especial"
+      },
+      "confirmMismatch": "Las contraseñas no coinciden",
+      "backToDashboard": "← Volver al panel",
+      "success": {
+        "title": "¡Contraseña actualizada!",
+        "description": "Tu contraseña ha sido cambiada exitosamente.",
+        "backToDashboard": "Volver al panel"
+      }
     },
     "reviewDashboard": {
       "statusLabel": "Estado",

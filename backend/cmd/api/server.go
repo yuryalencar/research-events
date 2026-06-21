@@ -101,6 +101,13 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	mux.Handle("POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede",
 		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.Supersede)))
 
+	// Authenticated user — validate session (used by frontend on page load for eager token check).
+	mux.Handle("GET /api/v1/users/me",
+		authMiddleware.RequireAuth(
+			http.HandlerFunc(userHandler.Me),
+		),
+	)
+
 	// Authenticated user — update own password.
 	// Rate-limited same as login (10/min/IP) per specs/backend/users-update-password.yaml.
 	// Rate limiter wraps RequireAuth so unauthenticated attempts still consume a token.

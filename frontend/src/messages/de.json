@@ -5,10 +5,11 @@
   "errors": {
     "VALIDATION_ERROR": "Bitte überprüfe deine Eingaben und versuche es erneut.",
     "UNAUTHORIZED": "Du musst angemeldet sein, um das zu tun.",
-    "TOKEN_MISSING": "Du musst angemeldet sein, um das zu tun.",
+    "TOKEN_MISSING": "Keine aktive Sitzung gefunden. Bitte melde dich an, um fortzufahren.",
     "TOKEN_EXPIRED": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
     "TOKEN_INVALID": "Deine Sitzung ist ungültig. Bitte melde dich erneut an.",
     "INVALID_CREDENTIALS": "E-Mail oder Passwort ist falsch.",
+    "INVALID_CURRENT_PASSWORD": "Das aktuelle Passwort ist falsch.",
     "ACCOUNT_LOCKED": "Dieses Konto ist gesperrt. Wende dich an einen Administrator.",
     "REFRESH_TOKEN_MISSING": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
     "REFRESH_TOKEN_INVALID": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
@@ -242,7 +243,31 @@
     "dashboard": {
       "welcomeHeading": "Willkommen, {name}",
       "loading": "Wird geladen…",
-      "logoutButton": "Abmelden"
+      "logoutButton": "Abmelden",
+      "updatePasswordMenuItem": "Passwort aktualisieren"
+    },
+    "updatePassword": {
+      "title": "Passwort aktualisieren",
+      "currentPasswordLabel": "Aktuelles Passwort",
+      "newPasswordLabel": "Neues Passwort",
+      "confirmPasswordLabel": "Neues Passwort bestätigen",
+      "showPassword": "Passwort anzeigen",
+      "hidePassword": "Passwort verbergen",
+      "saveButton": "Speichern",
+      "savingButton": "Wird gespeichert…",
+      "complexity": {
+        "minLength": "Mindestens 8 Zeichen",
+        "hasUppercase": "Mindestens ein Großbuchstabe (A–Z)",
+        "hasLowercase": "Mindestens ein Kleinbuchstabe (a–z)",
+        "hasSpecial": "Mindestens ein Sonderzeichen"
+      },
+      "confirmMismatch": "Passwörter stimmen nicht überein",
+      "backToDashboard": "← Zurück zum Dashboard",
+      "success": {
+        "title": "Passwort aktualisiert!",
+        "description": "Ihr Passwort wurde erfolgreich geändert.",
+        "backToDashboard": "Zurück zum Dashboard"
+      }
     },
     "reviewDashboard": {
       "statusLabel": "Status",

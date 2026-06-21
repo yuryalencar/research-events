@@ -5,10 +5,11 @@
   "errors": {
     "VALIDATION_ERROR": "Please check your input and try again.",
     "UNAUTHORIZED": "You need to be logged in to do that.",
-    "TOKEN_MISSING": "You need to be logged in to do that.",
+    "TOKEN_MISSING": "No active session found. Please sign in to continue.",
     "TOKEN_EXPIRED": "Your session has expired. Please log in again.",
     "TOKEN_INVALID": "Your session is invalid. Please log in again.",
     "INVALID_CREDENTIALS": "Incorrect email or password.",
+    "INVALID_CURRENT_PASSWORD": "Current password is incorrect.",
     "ACCOUNT_LOCKED": "This account is locked. Contact an administrator.",
     "REFRESH_TOKEN_MISSING": "Your session has expired. Please log in again.",
     "REFRESH_TOKEN_INVALID": "Your session has expired. Please log in again.",
@@ -242,7 +243,31 @@
     "dashboard": {
       "welcomeHeading": "Welcome, {name}",
       "loading": "Loading…",
-      "logoutButton": "Sign out"
+      "logoutButton": "Sign out",
+      "updatePasswordMenuItem": "Update password"
+    },
+    "updatePassword": {
+      "title": "Update Password",
+      "currentPasswordLabel": "Current password",
+      "newPasswordLabel": "New password",
+      "confirmPasswordLabel": "Confirm new password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "saveButton": "Save",
+      "savingButton": "Saving…",
+      "complexity": {
+        "minLength": "At least 8 characters",
+        "hasUppercase": "At least one uppercase letter (A–Z)",
+        "hasLowercase": "At least one lowercase letter (a–z)",
+        "hasSpecial": "At least one special character"
+      },
+      "confirmMismatch": "Passwords do not match",
+      "backToDashboard": "← Back to dashboard",
+      "success": {
+        "title": "Password updated!",
+        "description": "Your password has been changed successfully.",
+        "backToDashboard": "Back to dashboard"
+      }
     },
     "reviewDashboard": {
       "statusLabel": "Status",

@@ -5,10 +5,11 @@
   "errors": {
     "VALIDATION_ERROR": "Verifique os dados informados e tente novamente.",
     "UNAUTHORIZED": "Você precisa estar conectado para fazer isso.",
-    "TOKEN_MISSING": "Você precisa estar conectado para fazer isso.",
+    "TOKEN_MISSING": "Nenhuma sessão ativa encontrada. Por favor, faça login para continuar.",
     "TOKEN_EXPIRED": "Sua sessão expirou. Faça login novamente.",
     "TOKEN_INVALID": "Sua sessão é inválida. Faça login novamente.",
     "INVALID_CREDENTIALS": "E-mail ou senha incorretos.",
+    "INVALID_CURRENT_PASSWORD": "Senha atual incorreta.",
     "ACCOUNT_LOCKED": "Esta conta está bloqueada. Contate um administrador.",
     "REFRESH_TOKEN_MISSING": "Sua sessão expirou. Faça login novamente.",
     "REFRESH_TOKEN_INVALID": "Sua sessão expirou. Faça login novamente.",
@@ -242,7 +243,31 @@
     "dashboard": {
       "welcomeHeading": "Bem-vindo(a), {name}",
       "loading": "Carregando…",
-      "logoutButton": "Sair"
+      "logoutButton": "Sair",
+      "updatePasswordMenuItem": "Atualizar senha"
+    },
+    "updatePassword": {
+      "title": "Atualizar Senha",
+      "currentPasswordLabel": "Senha atual",
+      "newPasswordLabel": "Nova senha",
+      "confirmPasswordLabel": "Confirmar nova senha",
+      "showPassword": "Mostrar senha",
+      "hidePassword": "Ocultar senha",
+      "saveButton": "Salvar",
+      "savingButton": "Salvando…",
+      "complexity": {
+        "minLength": "Pelo menos 8 caracteres",
+        "hasUppercase": "Pelo menos uma letra maiúscula (A–Z)",
+        "hasLowercase": "Pelo menos uma letra minúscula (a–z)",
+        "hasSpecial": "Pelo menos um caractere especial"
+      },
+      "confirmMismatch": "As senhas não coincidem",
+      "backToDashboard": "← Voltar ao painel",
+      "success": {
+        "title": "Senha atualizada!",
+        "description": "Sua senha foi alterada com sucesso.",
+        "backToDashboard": "Voltar ao painel"
+      }
     },
     "reviewDashboard": {
       "statusLabel": "Status",

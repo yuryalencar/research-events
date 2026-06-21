@@ -1,0 +1,57 @@
+endpoint: GET /api/v1/users/me
+
+description: >
+  Returns the authenticated user's profile from the JWT context.
+  Used by the frontend on every protected page load to eagerly validate
+  the session token (and trigger a refresh attempt if expired).
+  No database query is performed — all fields come from the validated JWT context
+  that RequireAuth has already populated.
+
+request:
+  auth: Required — access_token cookie validated by RequireAuth middleware
+  body: none
+
+responses:
+  200:
+    description: Session is valid; user data returned from JWT context
+    body:
+      code: SESSION_VALID
+      data:
+        id: number
+        name: string
+        email: string
+        role: "admin" | "moderator"
+  401:
+    description: No valid session — access token missing, invalid, or expired (and refresh failed)
+    body:
+      code: TOKEN_MISSING | TOKEN_EXPIRED | TOKEN_INVALID
+      error:
+        message: string
+    note: >
+      TOKEN_EXPIRED is returned when the access token has expired. The frontend
+      apiPrivateRequest layer intercepts this code and automatically calls
+      POST /api/v1/auth/refresh-token before retrying. If both tokens are invalid,
+      TOKEN_EXPIRED propagates to the caller, which triggers a redirect to login.
+
+rules:
+  - No database query — user data is read from the JWT context set by RequireAuth
+  - No rate-limiting — this is a read endpoint called once per page load; adding
+    rate-limits would break normal navigation
+  - Response fields match the AuthUser context struct (ID, Name, Email, Role)
+
+permissions:
+  - Any authenticated user (admin or moderator) may call this endpoint
+  - Contributors cannot authenticate and therefore cannot reach this endpoint
+
+border_cases:
+  - Access token present but expired → 401 TOKEN_EXPIRED (frontend auto-refreshes)
+  - Both access and refresh tokens invalid → 401 TOKEN_EXPIRED after refresh attempt
+  - Valid token but user was deleted from DB → 401 TOKEN_INVALID (RequireAuth checks DB)
+  - Valid token but account locked → 423 ACCOUNT_LOCKED (RequireAuth checks lock status)
+
+definition_of_done:
+  - [x] Returns 200 SESSION_VALID with id, name, email, role when auth user is in context
+  - [x] Returns 401 TOKEN_MISSING when no JWT cookie is present (RequireAuth not in chain — handler fallback)
+  - [x] Route registered at GET /api/v1/users/me with RequireAuth middleware
+  - [x] No additional DB query in handler (reads only from context)
+  - [x] Handler tests: TestUserHandler_Me_ReturnsAuthenticatedUser, TestUserHandler_Me_NoAuthUser

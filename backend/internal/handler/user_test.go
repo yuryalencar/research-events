@@ -253,6 +253,75 @@ func TestUserHandler_UpdatePassword_ComplexityFailures(t *testing.T) {
 	}
 }
 
+// --- GET /api/v1/users/me ---
+
+func meMux(h *handler.UserHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/users/me", h.Me)
+	return mux
+}
+
+// Returns 200 SESSION_VALID with user data when a valid auth user is in context.
+func TestUserHandler_Me_ReturnsAuthenticatedUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockUserRepository(ctrl)
+	// No repo calls expected — Me reads only from context.
+
+	h := handler.NewUserHandler(mockRepo, userTestLogger)
+	srv := meMux(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+	req = req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{
+		ID:    42,
+		Name:  "Alice Admin",
+		Email: "alice@example.com",
+		Role:  "admin",
+	}))
+
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Equal(t, "SESSION_VALID", resp["code"])
+
+	data, ok := resp["data"].(map[string]any)
+	require.True(t, ok, "expected data object")
+	assert.Equal(t, float64(42), data["id"])
+	assert.Equal(t, "Alice Admin", data["name"])
+	assert.Equal(t, "alice@example.com", data["email"])
+	assert.Equal(t, "admin", data["role"])
+}
+
+// Returns 401 TOKEN_MISSING when no auth user is in context (RequireAuth not in chain).
+func TestUserHandler_Me_NoAuthUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockUserRepository(ctrl)
+
+	h := handler.NewUserHandler(mockRepo, userTestLogger)
+	srv := meMux(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+	// Intentionally no middleware.WithAuthUser.
+
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Equal(t, "TOKEN_MISSING", resp["code"])
+}
+
+// --- UpdatePassword ---
+
 // Spec DoD: "Returns 400 INVALID_CURRENT_PASSWORD when current_password is wrong"
 func TestUserHandler_UpdatePassword_WrongCurrentPassword(t *testing.T) {
 	ctrl := gomock.NewController(t)

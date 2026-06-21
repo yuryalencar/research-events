@@ -1,15 +1,16 @@
 "use client"
 
 import type { JSX } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
-import { ManageDashboard } from "@/components/manage/ManageDashboard"
+import { UpdatePasswordCard } from "@/components/manage/UpdatePasswordCard"
 import { useSessionGuard } from "@/hooks/useSessionGuard"
 
 // --- Component ---
 
-export default function ModeratorDashboardPage(): JSX.Element {
+export default function ModeratorUpdatePasswordPage(): JSX.Element {
   const t = useTranslations("manage")
+  const locale = useLocale()
   const { user } = useSessionGuard("moderator")
 
   if (!user) {
@@ -20,5 +21,5 @@ export default function ModeratorDashboardPage(): JSX.Element {
     )
   }
 
-  return <ManageDashboard user={user} />
+  return <UpdatePasswordCard dashboardHref={`/${locale}/manage/moderator`} />
 }

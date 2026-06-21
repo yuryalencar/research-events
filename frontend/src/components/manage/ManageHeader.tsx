@@ -2,7 +2,8 @@
 
 import type { JSX } from "react"
 import { useState, useEffect, useRef } from "react"
-import { useTranslations } from "next-intl"
+import { useRouter } from "next/navigation"
+import { useTranslations, useLocale } from "next-intl"
 
 // --- Types ---
 
@@ -16,6 +17,8 @@ interface ManageHeaderProps {
 
 function ManageHeader({ userName, userRole, onSignOut }: ManageHeaderProps): JSX.Element {
   const t = useTranslations("manage")
+  const locale = useLocale()
+  const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarInitial = userName.charAt(0).toUpperCase()
@@ -37,6 +40,11 @@ function ManageHeader({ userName, userRole, onSignOut }: ManageHeaderProps): JSX
   function handleSignOut(): void {
     setMenuOpen(false)
     onSignOut()
+  }
+
+  function handleUpdatePassword(): void {
+    setMenuOpen(false)
+    router.push(`/${locale}/manage/${userRole}/password`)
   }
 
   return (
@@ -67,8 +75,15 @@ function ManageHeader({ userName, userRole, onSignOut }: ManageHeaderProps): JSX
         {menuOpen && (
           <div
             role="menu"
-            className="absolute right-0 mt-2 w-40 rounded-md border border-border bg-card py-1 shadow-lg"
+            className="absolute right-0 mt-2 w-48 rounded-md border border-border bg-card py-1 shadow-lg"
           >
+            <button
+              role="menuitem"
+              onClick={handleUpdatePassword}
+              className="w-full px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            >
+              {t("dashboard.updatePasswordMenuItem")}
+            </button>
             <button
               role="menuitem"
               onClick={handleSignOut}
