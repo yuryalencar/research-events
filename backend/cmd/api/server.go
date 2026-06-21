@@ -41,6 +41,7 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	adminUserHandler := handler.NewAdminUserHandler(userRepo, auditRepo, logger)
 	adminEventHandler := handler.NewAdminEventHandler(eventRepo, logger)
 	eventHandler := handler.NewEventHandler(eventRepo, logger)
+	userHandler := handler.NewUserHandler(userRepo, logger)
 
 	// --- Middleware ---
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, userRepo)
@@ -99,6 +100,17 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	// per events-deadlines-supersede.yaml.
 	mux.Handle("POST /api/v1/events/{eventId}/deadlines/{deadlineId}/supersede",
 		publicRateLimiter.Limit(http.HandlerFunc(eventHandler.Supersede)))
+
+	// Authenticated user — update own password.
+	// Rate-limited same as login (10/min/IP) per specs/backend/users-update-password.yaml.
+	// Rate limiter wraps RequireAuth so unauthenticated attempts still consume a token.
+	mux.Handle("PATCH /api/v1/users/me/password",
+		rateLimiter.Limit(
+			authMiddleware.RequireAuth(
+				http.HandlerFunc(userHandler.UpdatePassword),
+			),
+		),
+	)
 
 	// Admin-only endpoints — RequireAuth then RequireRole("admin").
 	mux.Handle("PATCH /api/v1/admin/users/{id}/unlock",

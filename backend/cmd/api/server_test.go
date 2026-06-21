@@ -163,6 +163,26 @@ func TestBuildHandler_EventsListRateLimited_Returns429AfterBurst(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, lastCode)
 }
 
+func TestBuildHandler_UpdatePasswordRateLimited_Returns429AfterBurst(t *testing.T) {
+	// Spec: users-update-password.yaml border_case
+	// "Rate limit hit with valid credentials → 429 regardless of whether the
+	// password would have been accepted"
+	// The rate limiter (10 req/min, burst 10) is the outermost layer on this
+	// route, so it fires before RequireAuth — no JWT cookie needed to exhaust it.
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
+
+	var lastCode int
+	for i := 0; i < 11; i++ {
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/me/password", nil)
+		req.RemoteAddr = "203.0.113.42:5678"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		lastCode = rec.Code
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, lastCode)
+}
+
 func TestBuildHandler_AdminUnlockRouteRegistered(t *testing.T) {
 	// No token cookie → 401 TOKEN_MISSING from RequireAuth, not 404.
 	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())

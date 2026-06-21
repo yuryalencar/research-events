@@ -33,6 +33,7 @@ type UserRepository interface {
 	LockAccount(ctx context.Context, userID uint) error
 	ResetFailedAttempts(ctx context.Context, userID uint) error
 	Unlock(ctx context.Context, userID uint) error
+	UpdatePassword(ctx context.Context, userID uint, newHash string) error
 }
 
 // --- Types ---
@@ -105,4 +106,9 @@ func (r *userRepository) Unlock(ctx context.Context, userID uint) error {
 		"locked_at":             nil,
 		"failed_login_attempts": 0,
 	}).Error
+}
+
+func (r *userRepository) UpdatePassword(ctx context.Context, userID uint, newHash string) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
+		Update("password_hash", newHash).Error
 }

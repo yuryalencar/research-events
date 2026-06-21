@@ -4,6 +4,7 @@ package repository_test
 // Spec: specs/backend/auth-login.yaml
 // Spec: specs/backend/auth-refresh-token.yaml
 // Spec: specs/backend/admin-users-unlock.yaml
+// Spec: specs/backend/users-update-password.yaml
 
 import (
 	"context"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/yuryalencar/research-events/internal/model"
 	"github.com/yuryalencar/research-events/internal/repository"
@@ -273,4 +275,66 @@ func TestUserRepository_Unlock_ClearsLockedAtAndResetsCounter(t *testing.T) {
 	require.NoError(t, tx.First(&updated, u.ID).Error)
 	assert.Nil(t, updated.LockedAt)
 	assert.Equal(t, 0, updated.FailedLoginAttempts)
+}
+
+// --- UpdatePassword ---
+
+func TestUserRepository_UpdatePassword_PersistsNewHash(t *testing.T) {
+	// Spec: users-update-password.yaml DoD "Password stored as bcrypt hash (cost 12) — never plaintext"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	oldHash := "$2a$12$oldhasholdhasholdhashold" // placeholder — not a real bcrypt hash
+	u := model.User{
+		Name:         "Donna",
+		Email:        "donna@example.com",
+		Role:         model.UserRoleAdmin,
+		PasswordHash: &oldHash,
+	}
+	require.NoError(t, tx.Create(&u).Error)
+
+	newPlain := "NewPass@2"
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPlain), 12)
+	require.NoError(t, err)
+
+	repo := repository.NewUserRepository(tx)
+	err = repo.UpdatePassword(context.Background(), u.ID, string(newHash))
+	require.NoError(t, err)
+
+	var updated model.User
+	require.NoError(t, tx.First(&updated, u.ID).Error)
+	require.NotNil(t, updated.PasswordHash)
+	assert.Equal(t, string(newHash), *updated.PasswordHash)
+}
+
+func TestUserRepository_UpdatePassword_NewHashVerifiableWithBcrypt(t *testing.T) {
+	// Spec: users-update-password.yaml DoD "New password can be used to authenticate
+	// (login) immediately after update" — proves the stored hash satisfies
+	// bcrypt.CompareHashAndPassword, which is exactly what ValidateCredentials calls on login.
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	oldHash := "$2a$12$oldhasholdhasholdhashold"
+	u := model.User{
+		Name:         "Eve",
+		Email:        "eve@example.com",
+		Role:         model.UserRoleAdmin,
+		PasswordHash: &oldHash,
+	}
+	require.NoError(t, tx.Create(&u).Error)
+
+	newPlain := "LoginReady@3"
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPlain), 12)
+	require.NoError(t, err)
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, repo.UpdatePassword(context.Background(), u.ID, string(newHash)))
+
+	var updated model.User
+	require.NoError(t, tx.First(&updated, u.ID).Error)
+	require.NotNil(t, updated.PasswordHash)
+
+	// This is the same comparison performed by ValidateCredentials (service.go) during login.
+	err = bcrypt.CompareHashAndPassword([]byte(*updated.PasswordHash), []byte(newPlain))
+	assert.NoError(t, err, "stored hash must match the new plaintext password — login must work immediately after update")
 }

@@ -187,6 +187,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-19 | [Management Dashboard — Frontend Implementation](ai-sessions/2026-06-19-manage-dashboard-implementation.md) | Full implementation of admin/moderator review queue: `useReviewEvents` hook, `ManageHeader` (Welcome + role + avatar menu), `EventReviewCard` (normal + own-event grey), `ManageDashboard` (filters, list, pagination). Custom select arrow (`appearance-none` + ChevronDown), `max-w-4xl` centering. 225 tests. |
 | 2026-06-19 | [Management Event Review — Frontend](ai-sessions/2026-06-19-manage-review-frontend.md) | 3-step review wizard: Step 1 edits event details (Leaflet map pre-pinned), Step 2 approve/reject with confirmation modals + ReviewSuccess screen, Step 3 deadline management with auto-filled contributor. Fixed LocationPicker async init race via `latLngRef`. Switched to CartoDB Voyager tiles for English place labels. |
 | 2026-06-21 | [Globe / Table View Toggle — Frontend](ai-sessions/2026-06-21-globe-table-toggle-feature.md) | Floating toggle button (desktop-only, `hidden md:flex`) switches homepage between 3D globe and a card-list table view. `useViewMode` hook manages state + forced resize-back-to-globe with sonner toast. `EventTableCard` shows all event fields collapsed, deadlines + manage link expanded. 257 tests. |
+| 2026-06-21 | [Update User Password — Backend](ai-sessions/2026-06-21-update-user-password-feature.md) | `PATCH /api/v1/users/me/password` — authenticated, rate-limited (10/min). Validates current password, complexity (8+ chars, upper, lower, special), hashes with bcrypt cost 12. FP service layer: 3 pure functions. Also fixed stale test DB (truncated committed rows that broke `ListEvents_*` integration tests). 401 tests. |
 
 ## Specs
 
@@ -218,6 +219,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Management Dashboard (Frontend) | [manage-dashboard.md](specs/frontend/manage-dashboard.md) | Done |
 | Management Event Review (Frontend) | [manage-review.md](specs/frontend/manage-review.md) | Done |
 | Globe / Table View Toggle (Frontend) | [globe-table-toggle.md](specs/frontend/globe-table-toggle.md) | Done |
+| Users: Update Password | [users-update-password.yaml](specs/backend/users-update-password.yaml) | Done |
 
 ---
 
