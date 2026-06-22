@@ -24,9 +24,9 @@ responses:
           email: string
     cookies_set:
       - name: access_token
-        flags: HTTP-only, Secure, SameSite=Strict, Path=/, MaxAge=30min
+        flags: HTTP-only, Secure, SameSite=None, Path=/, MaxAge=30min
       - name: refresh_token
-        flags: HTTP-only, Secure, SameSite=Strict, Path=/api/v1/auth, MaxAge=4h
+        flags: HTTP-only, Secure, SameSite=None, Path=/api/v1/auth, MaxAge=4h
 
   400:
     code: VALIDATION_ERROR
@@ -97,3 +97,54 @@ definition_of_done:
   - access_token_jti and refresh_token_hash written to DB on success
   - Rate limit enforced (10/IP/min)
   - All border cases have a corresponding test
+
+bug_fix: SameSite=Strict broke all authenticated requests in cross-origin production deploy
+
+symptom: >
+  Login returned LOGIN_SUCCESS and the Set-Cookie headers were visible in the
+  browser's network tab. But every subsequent authenticated request (e.g. GET
+  /api/v1/users/me) returned 401 TOKEN_MISSING — the cookies were never sent.
+  Worked fine in local development (same origin: localhost:3000 → localhost:8080
+  via the dev proxy).
+
+root_cause: >
+  Both auth cookies were set with SameSite=Strict. The browser spec for
+  SameSite=Strict is: never send the cookie when the request origin differs
+  from the cookie domain, regardless of HTTPS or CORS headers. In production,
+  the frontend (Vercel, e.g. app.vercel.app) and backend (Render, e.g.
+  api.onrender.com) are on different domains, so the browser silently dropped
+  both cookies on every cross-origin request — no error, no warning, the
+  request simply arrived at the backend without any cookie header.
+  Local dev was unaffected because the Next.js dev proxy rewrites API calls
+  to localhost:8080, making them same-origin from the browser's perspective.
+
+fix: >
+  Changed SameSite from Strict to None on both cookies
+  (internal/handler/auth.go — setAccessTokenCookie, setRefreshTokenCookie,
+  and both cookies in clearAuthCookies). SameSite=None requires Secure=true,
+  which was already set, so no other change was needed. The CORS middleware
+  was already correctly configured (Access-Control-Allow-Credentials: true,
+  specific origin instead of wildcard).
+
+how_to_verify:
+  - Deploy backend to Render and frontend to Vercel (different domains)
+  - Log in — observe LOGIN_SUCCESS and two Set-Cookie headers in DevTools Network tab
+  - Make a GET /api/v1/users/me request — must return 200 with user data
+  - Inspect the /me request in DevTools — Cookie header must include access_token
+  - Log out — both cookies must be cleared (MaxAge=-1)
+
+curl_proof: |
+  BASE_URL="https://your-api.onrender.com"
+  COOKIE_JAR=$(mktemp)
+
+  # 1. Login — cookies are written to the jar
+  curl -s -X POST "$BASE_URL/api/v1/auth/login" \
+    -H "Content-Type: application/json" \
+    -H "Origin: https://your-app.vercel.app" \
+    -d '{"email":"admin@example.com","password":"your-password"}' \
+    -c "$COOKIE_JAR" | jq .
+
+  # 2. /me — cookie jar is sent; must return 200 (was returning TOKEN_MISSING before the fix)
+  curl -s -X GET "$BASE_URL/api/v1/users/me" \
+    -H "Origin: https://your-app.vercel.app" \
+    -b "$COOKIE_JAR" | jq .
