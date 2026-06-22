@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { NextIntlClientProvider } from "next-intl"
 import { getMessages, getTranslations } from "next-intl/server"
 
+import { LanguageSelector } from "@/components/ui/LanguageSelector"
 import { Toaster } from "@/components/ui/sonner"
 
 import "../globals.css"
@@ -31,6 +32,7 @@ export default async function LocaleLayout({ children, params }: Props): Promise
         <NextIntlClientProvider messages={messages}>
           {children}
           <Toaster />
+          <LanguageSelector />
         </NextIntlClientProvider>
       </body>
     </html>
