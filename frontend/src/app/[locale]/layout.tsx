@@ -13,13 +13,47 @@ interface Props {
   params: Promise<{ locale: string }>
 }
 
-// generateMetadata is required here — without any metadata export, Next.js
-// falls back to a streaming metadata Suspense boundary that mismatches
-// between server and client render (a known Next.js 16 dev-mode hydration
-// bug), even on pages that render correctly otherwise.
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("app")
-  return { title: t("title") }
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://research-events.vercel.app"
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params
+  const t = await getTranslations({ locale, namespace: "app" })
+
+  return {
+    metadataBase: new URL(APP_URL),
+    title: {
+      default: t("title"),
+      template: `%s | ${t("title")}`,
+    },
+    description: t("description"),
+    keywords: ["research conferences", "software engineering", "computer science", "academic events", "submission deadlines", "call for papers"],
+    authors: [{ name: "Yury Lima" }],
+    creator: "Yury Lima",
+    openGraph: {
+      type: "website",
+      siteName: t("title"),
+      title: t("title"),
+      description: t("description"),
+      url: `${APP_URL}/${locale}`,
+      locale,
+      images: [{ url: "/logo-with-opensource.png", alt: t("title") }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: t("title"),
+      description: t("description"),
+      images: ["/logo-with-opensource.png"],
+    },
+    alternates: {
+      canonical: `${APP_URL}/${locale}`,
+      languages: {
+        en: `${APP_URL}/en`,
+        pt: `${APP_URL}/pt`,
+        es: `${APP_URL}/es`,
+        de: `${APP_URL}/de`,
+      },
+    },
+  }
 }
 
 export default async function LocaleLayout({ children, params }: Props): Promise<React.JSX.Element> {

@@ -1,6 +1,11 @@
 {
   "app": {
-    "title": "ReSEARCH Events"
+    "title": "ReSEARCH Events",
+    "description": "Descubra conferências e eventos de pesquisa em engenharia de software e ciência da computação. Explore num globo 3D interativo e fique por dentro dos prazos de submissão."
+  },
+  "meta": {
+    "submitTitle": "Enviar um Evento",
+    "submitDescription": "Envie uma conferência ou workshop de engenharia de software ou ciência da computação para revisão da comunidade. Preencha os detalhes e marque a localização no mapa."
   },
   "errors": {
     "VALIDATION_ERROR": "Verifique os dados informados e tente novamente.",

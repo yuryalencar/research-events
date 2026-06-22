@@ -1,6 +1,11 @@
 {
   "app": {
-    "title": "ReSEARCH Events"
+    "title": "ReSEARCH Events",
+    "description": "Discover research conferences and events in software engineering and computer science. Explore on an interactive 3D globe and stay on top of submission deadlines."
+  },
+  "meta": {
+    "submitTitle": "Submit an Event",
+    "submitDescription": "Submit a software engineering or computer science conference or workshop for community review. Provide details and drop a pin on the map to set the location."
   },
   "errors": {
     "VALIDATION_ERROR": "Please check your input and try again.",

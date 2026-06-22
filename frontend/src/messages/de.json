@@ -1,6 +1,11 @@
 {
   "app": {
-    "title": "ReSEARCH Events"
+    "title": "ReSEARCH Events",
+    "description": "Entdecke Forschungskonferenzen und -veranstaltungen in Software Engineering und Informatik. Erkunde sie auf einem interaktiven 3D-Globus und behalte Einreichungsfristen im Blick."
+  },
+  "meta": {
+    "submitTitle": "Veranstaltung einreichen",
+    "submitDescription": "Reiche eine Software-Engineering- oder Informatikkonferenz zur Gemeinschaftsprüfung ein. Gib Details an und markiere den Standort auf der Karte."
   },
   "errors": {
     "VALIDATION_ERROR": "Bitte überprüfe deine Eingaben und versuche es erneut.",
