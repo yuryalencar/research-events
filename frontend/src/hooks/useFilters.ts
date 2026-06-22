@@ -2,10 +2,8 @@ import { useState, useMemo, useCallback } from "react"
 
 // --- Types ---
 
-// year is always a number — the spec requires every API call to include a
-// specific year; it can never be unset or undefined.
 interface EventFilters {
-  year: number
+  year: number | undefined
   domain?: string
   tier?: string
   country?: string
@@ -16,7 +14,7 @@ interface UseFiltersReturn {
   draftFilters: EventFilters
   activeFilters: EventFilters
   isDirty: boolean
-  setYear: (year: number) => void
+  setYear: (year: number | undefined) => void
   setDomain: (domain: string | undefined) => void
   setTier: (tier: string | undefined) => void
   setCountry: (country: string | undefined) => void
@@ -49,7 +47,7 @@ function useFilters(currentYear: number): UseFiltersReturn {
     [draftFilters, activeFilters],
   )
 
-  const setYear = useCallback((year: number) => {
+  const setYear = useCallback((year: number | undefined) => {
     setDraftFilters((prev) => ({ ...prev, year }))
   }, [])
 

@@ -1,0 +1,27 @@
+endpoint: GET /api/v1/events (year filter change only)
+
+description: >
+  Changes the year query param from an exact-match filter to a "from year"
+  filter. Sending ?year=2026 now returns all events where year >= 2026.
+  Omitting year returns all events with no year constraint.
+
+change:
+  before: WHERE year = ? (defaults to currentYear when omitted)
+  after:  WHERE year >= ? (omitted entirely when no year param is sent)
+
+firstDeadlineMonth interaction:
+  when year IS provided: deadline month subquery scopes to deadlines in year >= N
+  when year is NOT provided: deadline month filter matches deadlines in any year
+
+responses: unchanged — no new error codes
+
+rules:
+  - year=0 or year="" is treated as omitted (no filter)
+  - year must still be a valid integer when provided — invalid value → 400
+
+definition_of_done:
+  - GET /events?year=2026 returns events with year 2026, 2027, 2028…
+  - GET /events returns all events regardless of year
+  - GET /events?year=2026&first_deadline_month=3 returns events year>=2026 with a March deadline
+  - GET /events?first_deadline_month=3 (no year) returns events with a March deadline in any year
+  - Existing tests updated; new cases added for >= semantics and no-year path

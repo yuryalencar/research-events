@@ -32,7 +32,7 @@ type RawListEventsQuery struct {
 // EventRepository.ListEvents, with defaults applied per
 // specs/backend/events-list.yaml.
 type ListEventsInput struct {
-	Year               int
+	Year               *int
 	Domain             *string
 	Country            *string
 	Status             model.EventStatus
@@ -69,13 +69,13 @@ var allowedStatuses = map[string]model.EventStatus{
 // makes every default and validation rule trivially testable: input -> output,
 // no mocks, no server, no database.
 func ValidateListEventsQuery(raw RawListEventsQuery, currentYear int) (ListEventsInput, error) {
-	year := currentYear
+	var year *int
 	if raw.Year != "" {
 		parsed, err := strconv.Atoi(raw.Year)
 		if err != nil {
 			return ListEventsInput{}, fmt.Errorf("year must be a valid integer")
 		}
-		year = parsed
+		year = &parsed
 	}
 
 	status := model.EventStatusApproved

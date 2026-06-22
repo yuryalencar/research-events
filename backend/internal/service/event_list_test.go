@@ -20,12 +20,11 @@ const currentYear = 2026
 // --- Defaults ---
 
 func TestValidateListEventsQuery_NoParams_ReturnsDefaults(t *testing.T) {
-	// Spec: events-list.yaml border_case "No filters at all → status=approved,
-	// year=current year, page=1, page_size=20"
+	// Spec: events-list-year-from-semantics.yaml — year omitted → Year is nil (no filter)
 	got, err := service.ValidateListEventsQuery(service.RawListEventsQuery{}, currentYear)
 
 	require.NoError(t, err)
-	assert.Equal(t, currentYear, got.Year)
+	assert.Nil(t, got.Year)
 	assert.Equal(t, model.EventStatusApproved, got.Status)
 	assert.Nil(t, got.Domain)
 	assert.Nil(t, got.Country)
@@ -39,11 +38,21 @@ func TestValidateListEventsQuery_NoParams_ReturnsDefaults(t *testing.T) {
 
 // --- Year ---
 
-func TestValidateListEventsQuery_YearOverride(t *testing.T) {
+func TestValidateListEventsQuery_YearOmitted_ReturnsNilYear(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — no ?year param → Year is nil → API returns all events
+	got, err := service.ValidateListEventsQuery(service.RawListEventsQuery{}, currentYear)
+
+	require.NoError(t, err)
+	assert.Nil(t, got.Year)
+}
+
+func TestValidateListEventsQuery_YearProvided_ReturnsParsedPointer(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — ?year=2025 → Year points to 2025
 	got, err := service.ValidateListEventsQuery(service.RawListEventsQuery{Year: "2025"}, currentYear)
 
 	require.NoError(t, err)
-	assert.Equal(t, 2025, got.Year)
+	require.NotNil(t, got.Year)
+	assert.Equal(t, 2025, *got.Year)
 }
 
 func TestValidateListEventsQuery_InvalidYear_ReturnsError(t *testing.T) {
@@ -53,13 +62,12 @@ func TestValidateListEventsQuery_InvalidYear_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestValidateListEventsQuery_StatusOmitted_YearStillDefaultsToCurrent(t *testing.T) {
-	// Spec: events-list.yaml border_case "?status=pending with no ?year → year still
-	// defaults to current year"
+func TestValidateListEventsQuery_StatusOmitted_YearIsNil(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — setting other params does not inject a year default
 	got, err := service.ValidateListEventsQuery(service.RawListEventsQuery{Status: "pending"}, currentYear)
 
 	require.NoError(t, err)
-	assert.Equal(t, currentYear, got.Year)
+	assert.Nil(t, got.Year)
 	assert.Equal(t, model.EventStatusPending, got.Status)
 }
 

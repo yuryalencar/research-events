@@ -19,10 +19,8 @@ interface UseEventsReturn {
 // snake_case ListEventsParams the API expects. Only includes optional fields
 // when they are explicitly set, so the query string stays clean.
 function toListEventsParams(filters: EventFilters): ListEventsParams {
-  const params: ListEventsParams = {
-    year: filters.year,
-    pagination: "off",
-  }
+  const params: ListEventsParams = { pagination: "off" }
+  if (filters.year !== undefined) params.year = filters.year
   if (filters.domain !== undefined) params.domain = filters.domain
   if (filters.tier !== undefined) params.tier = filters.tier as EventTier
   if (filters.country !== undefined) params.country = filters.country

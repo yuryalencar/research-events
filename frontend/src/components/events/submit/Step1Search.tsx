@@ -50,6 +50,7 @@ function Step1Search({ onContinue }: Step1SearchProps): JSX.Element {
           <input
             id="search-year"
             type="number"
+            min={new Date().getFullYear()}
             value={search.year}
             onChange={e => search.setYear(Number(e.target.value))}
             className="w-24 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"

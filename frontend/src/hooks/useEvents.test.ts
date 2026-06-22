@@ -40,7 +40,8 @@ const event: EventListItem = {
   updated_at: "2026-01-01T00:00:00Z",
 }
 
-const baseFilters = { year: 2026 }
+const CURRENT_YEAR = new Date().getFullYear()
+const baseFilters = { year: CURRENT_YEAR }
 
 describe("useEvents", () => {
   beforeEach(() => {
@@ -64,7 +65,7 @@ describe("useEvents", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-    expect(listEvents).toHaveBeenCalledWith({ year: 2026, pagination: "off" })
+    expect(listEvents).toHaveBeenCalledWith({ year: CURRENT_YEAR, pagination: "off" })
     expect(result.current.events).toEqual([event])
   })
 
@@ -91,7 +92,6 @@ describe("useEvents", () => {
   })
 
   // --- Filter params ---
-  // Spec: "year is always included in every listEvents call — never omitted" (Rules)
 
   it("always sends pagination=off regardless of filters", async () => {
     vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
@@ -131,7 +131,7 @@ describe("useEvents", () => {
   it("omits optional filters from params when undefined", async () => {
     vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
 
-    const { result } = renderHook(() => useEvents({ year: 2026 }))
+    const { result } = renderHook(() => useEvents({ year: CURRENT_YEAR }))
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
@@ -142,11 +142,24 @@ describe("useEvents", () => {
     expect(calledWith).not.toHaveProperty("first_deadline_month")
   })
 
+  it("omits year from params when year is undefined", async () => {
+    // Spec: year-filter-from-semantics.md — undefined year → no year param → API returns all events
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const { result } = renderHook(() => useEvents({ year: undefined }))
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    const calledWith = vi.mocked(listEvents).mock.calls[0][0]
+    expect(calledWith).not.toHaveProperty("year")
+    expect(calledWith).toHaveProperty("pagination", "off")
+  })
+
   it("re-fetches when filters change", async () => {
     vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
 
     const { result, rerender } = renderHook(
-      ({ filters }: { filters: { year: number } }) => useEvents(filters),
+      ({ filters }: { filters: { year: number | undefined } }) => useEvents(filters),
       { initialProps: { filters: { year: 2026 } } },
     )
 
@@ -157,5 +170,24 @@ describe("useEvents", () => {
 
     await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2))
     expect(listEvents).toHaveBeenLastCalledWith({ year: 2025, pagination: "off" })
+  })
+
+  it("re-fetches when year is cleared to undefined", async () => {
+    // Spec: year-filter-from-semantics.md — switching from a year to undefined triggers a new fetch
+    vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+    const { result, rerender } = renderHook(
+      ({ filters }: { filters: { year: number | undefined } }) => useEvents(filters),
+      { initialProps: { filters: { year: CURRENT_YEAR as number | undefined } } },
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(listEvents).toHaveBeenCalledTimes(1)
+
+    rerender({ filters: { year: undefined } })
+
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2))
+    const calledWith = vi.mocked(listEvents).mock.calls[1][0]
+    expect(calledWith).not.toHaveProperty("year")
   })
 })

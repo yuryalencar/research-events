@@ -155,6 +155,9 @@ func mustCreateUser(t *testing.T, tx *gorm.DB, email string) model.User {
 	return user
 }
 
+// intPtr returns a pointer to n — used to build ListEventsFilter.Year (*int).
+func intPtr(n int) *int { return &n }
+
 // baseListEvent returns a fresh (unsaved) Event with sensible defaults
 // (status=approved, year=2026, domain=computer_science, country=Brazil,
 // tier=unranked) for ListEvents tests. Callers override only the fields
@@ -171,19 +174,23 @@ func baseListEvent(slug string, userID uint) model.Event {
 	}
 }
 
-func TestEventRepository_ListEvents_FiltersByYearAndStatus(t *testing.T) {
-	// Spec: events-list.yaml definition_of_done "?year=2025 alone → approved events for 2025."
+func TestEventRepository_ListEvents_YearFilter_FromYearOnwards(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — year=2026 returns 2026 and 2027, excludes 2025
 	tx, rollback := beginTx(t)
 	defer rollback()
 
 	user := mustCreateUser(t, tx, "ana@example.com")
 
-	match := baseListEvent("MATCH2026", user.ID)
-	require.NoError(t, tx.Create(&match).Error)
+	event2025 := baseListEvent("EV2025", user.ID)
+	event2025.Year = 2025
+	require.NoError(t, tx.Create(&event2025).Error)
 
-	wrongYear := baseListEvent("WRONGYEAR2025", user.ID)
-	wrongYear.Year = 2025
-	require.NoError(t, tx.Create(&wrongYear).Error)
+	event2026 := baseListEvent("EV2026", user.ID)
+	require.NoError(t, tx.Create(&event2026).Error)
+
+	event2027 := baseListEvent("EV2027", user.ID)
+	event2027.Year = 2027
+	require.NoError(t, tx.Create(&event2027).Error)
 
 	pending := baseListEvent("PENDING2026", user.ID)
 	pending.Status = model.EventStatusPending
@@ -192,13 +199,44 @@ func TestEventRepository_ListEvents_FiltersByYearAndStatus(t *testing.T) {
 	repo := repository.NewEventRepository(tx)
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, match.ID, got[0].ID)
-	assert.Equal(t, int64(1), total)
+	require.Len(t, got, 2)
+	assert.Equal(t, int64(2), total)
+	ids := []uint{got[0].ID, got[1].ID}
+	assert.Contains(t, ids, event2026.ID)
+	assert.Contains(t, ids, event2027.ID)
+}
+
+func TestEventRepository_ListEvents_NoYearFilter_ReturnsAllYears(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — nil year → no year constraint → all events returned
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	user := mustCreateUser(t, tx, "ana@example.com")
+
+	event2024 := baseListEvent("NOYEAR2024", user.ID)
+	event2024.Year = 2024
+	require.NoError(t, tx.Create(&event2024).Error)
+
+	event2026 := baseListEvent("NOYEAR2026", user.ID)
+	require.NoError(t, tx.Create(&event2026).Error)
+
+	event2028 := baseListEvent("NOYEAR2028", user.ID)
+	event2028.Year = 2028
+	require.NoError(t, tx.Create(&event2028).Error)
+
+	repo := repository.NewEventRepository(tx)
+
+	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
+		Year: nil, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, int64(3), total)
 }
 
 func TestEventRepository_ListEvents_FiltersByDomain(t *testing.T) {
@@ -220,7 +258,7 @@ func TestEventRepository_ListEvents_FiltersByDomain(t *testing.T) {
 	domain := "computer_science"
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, Domain: &domain,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, Domain: &domain,
 	})
 
 	require.NoError(t, err)
@@ -249,7 +287,7 @@ func TestEventRepository_ListEvents_FiltersByCountryCaseInsensitiveExactMatch(t 
 	country := "brazil" // lower-case — must still match "Brazil" exactly (case-insensitive)
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, Country: &country,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, Country: &country,
 	})
 
 	require.NoError(t, err)
@@ -276,7 +314,7 @@ func TestEventRepository_ListEvents_FiltersByTier(t *testing.T) {
 	tier := "A"
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, Tier: &tier,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, Tier: &tier,
 	})
 
 	require.NoError(t, err)
@@ -305,7 +343,7 @@ func TestEventRepository_ListEvents_SortedByStartDateAscending(t *testing.T) {
 	repo := repository.NewEventRepository(tx)
 
 	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)
@@ -323,7 +361,7 @@ func TestEventRepository_ListEvents_NoMatches_ReturnsEmptySliceAndZeroCount(t *t
 	repo := repository.NewEventRepository(tx)
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)
@@ -352,7 +390,7 @@ func TestEventRepository_ListEvents_FiltersByBBox(t *testing.T) {
 	repo := repository.NewEventRepository(tx)
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 		BBox: &repository.BBoxFilter{MinLng: -40, MinLat: -10, MaxLng: -30, MaxLat: -5},
 	})
 
@@ -377,7 +415,7 @@ func TestEventRepository_ListEvents_BBoxBoundaryValuesAreInclusive(t *testing.T)
 	repo := repository.NewEventRepository(tx)
 
 	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 		BBox: &repository.BBoxFilter{MinLng: -40, MinLat: -10, MaxLng: -30, MaxLat: -5},
 	})
 
@@ -405,7 +443,7 @@ func TestEventRepository_ListEvents_FirstDeadlineMonth_MatchesEarliestAbstractOr
 	month := 6
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
 	})
 
 	require.NoError(t, err)
@@ -433,7 +471,7 @@ func TestEventRepository_ListEvents_FirstDeadlineMonth_ExcludesEventWithOnlyNoti
 	month := 6
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
 	})
 
 	require.NoError(t, err)
@@ -460,7 +498,7 @@ func TestEventRepository_ListEvents_FirstDeadlineMonth_ExcludesEventWhenEarliest
 	month := 6
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
 	})
 
 	require.NoError(t, err)
@@ -489,12 +527,55 @@ func TestEventRepository_ListEvents_FirstDeadlineMonth_UsesEarliestWhenLaterDead
 	month := 6
 
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
 	})
 
 	require.NoError(t, err)
 	assert.Empty(t, got)
 	assert.Equal(t, int64(0), total)
+}
+
+func TestEventRepository_ListEvents_FirstDeadlineMonth_NoYear_MatchesAnyYear(t *testing.T) {
+	// Spec: events-list-year-from-semantics.yaml — no year + first_deadline_month=6
+	// must match events with a June deadline in any year.
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	user := mustCreateUser(t, tx, "ana@example.com")
+
+	event2025 := baseListEvent("FDMNOYR2025", user.ID)
+	event2025.Year = 2025
+	event2025.Deadlines = []model.Deadline{
+		{Type: model.DeadlineTypeAbstract, Description: "Abstract", Date: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID},
+	}
+	require.NoError(t, tx.Create(&event2025).Error)
+
+	event2027 := baseListEvent("FDMNOYR2027", user.ID)
+	event2027.Year = 2027
+	event2027.Deadlines = []model.Deadline{
+		{Type: model.DeadlineTypeAbstract, Description: "Abstract", Date: time.Date(2027, 6, 10, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID},
+	}
+	require.NoError(t, tx.Create(&event2027).Error)
+
+	noJune := baseListEvent("FDMNOYR_NOMATCH", user.ID)
+	noJune.Deadlines = []model.Deadline{
+		{Type: model.DeadlineTypeAbstract, Description: "Abstract", Date: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), IsActive: true, CreatedByID: user.ID},
+	}
+	require.NoError(t, tx.Create(&noJune).Error)
+
+	repo := repository.NewEventRepository(tx)
+	month := 6
+
+	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
+		Year: nil, Status: model.EventStatusApproved, Page: 1, PageSize: 20, FirstDeadlineMonth: &month,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, int64(2), total)
+	ids := []uint{got[0].ID, got[1].ID}
+	assert.Contains(t, ids, event2025.ID)
+	assert.Contains(t, ids, event2027.ID)
 }
 
 func TestEventRepository_ListEvents_Pagination_ReturnsCorrectSliceAndTotal(t *testing.T) {
@@ -523,7 +604,7 @@ func TestEventRepository_ListEvents_Pagination_ReturnsCorrectSliceAndTotal(t *te
 	repo := repository.NewEventRepository(tx)
 
 	page1, total1, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 2,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 2,
 	})
 	require.NoError(t, err)
 	require.Len(t, page1, 2)
@@ -532,7 +613,7 @@ func TestEventRepository_ListEvents_Pagination_ReturnsCorrectSliceAndTotal(t *te
 	assert.Equal(t, int64(3), total1)
 
 	page2, total2, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 2, PageSize: 2,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 2, PageSize: 2,
 	})
 	require.NoError(t, err)
 	require.Len(t, page2, 1)
@@ -563,7 +644,7 @@ func TestEventRepository_ListEvents_PaginationOff_ReturnsAllMatchingRows(t *test
 	// Even though Page/PageSize are set to a tiny page, PaginationOff must win
 	// and return every matching row.
 	got, total, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 1, PaginationOff: true,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 1, PaginationOff: true,
 	})
 
 	require.NoError(t, err)
@@ -589,7 +670,7 @@ func TestEventRepository_ListEvents_IncludesCreatedByAndLastUpdatedBy(t *testing
 	repo := repository.NewEventRepository(tx)
 
 	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)
@@ -624,7 +705,7 @@ func TestEventRepository_ListEvents_OnlyIncludesActiveDeadlines(t *testing.T) {
 	repo := repository.NewEventRepository(tx)
 
 	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)
@@ -659,7 +740,7 @@ func TestEventRepository_ListEvents_IncludesSupersededDeadlinesAlongsideActive(t
 	repo := repository.NewEventRepository(tx)
 
 	got, _, err := repo.ListEvents(context.Background(), repository.ListEventsFilter{
-		Year: 2026, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: intPtr(2026), Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	})
 
 	require.NoError(t, err)

@@ -88,7 +88,7 @@ type EventRepository interface {
 // ListEventsFilter groups the filters for EventRepository.ListEvents, mirroring
 // the validated fields of service.ListEventsInput.
 type ListEventsFilter struct {
-	Year    int
+	Year    *int // nil = no year constraint; non-nil = events.year >= *Year
 	Status  model.EventStatus
 	Domain  *string
 	Country *string
@@ -200,7 +200,10 @@ func (r *eventRepository) ListEvents(ctx context.Context, filter ListEventsFilte
 // returning a fresh *gorm.DB from each call site keeps the count query and the
 // select query independent (avoiding state leaking between them).
 func applyListEventsFilters(db *gorm.DB, filter ListEventsFilter) *gorm.DB {
-	db = db.Where("year = ? AND status = ?", filter.Year, filter.Status)
+	db = db.Where("status = ?", filter.Status)
+	if filter.Year != nil {
+		db = db.Where("year >= ?", *filter.Year)
+	}
 	if filter.Domain != nil {
 		db = db.Where("domain = ?", *filter.Domain)
 	}
@@ -215,20 +218,36 @@ func applyListEventsFilters(db *gorm.DB, filter ListEventsFilter) *gorm.DB {
 			filter.BBox.MinLng, filter.BBox.MaxLng, filter.BBox.MinLat, filter.BBox.MaxLat)
 	}
 	if filter.FirstDeadlineMonth != nil {
-		db = db.Where(`EXISTS (
-			SELECT 1 FROM deadlines d
-			WHERE d.event_id = events.id
-				AND d.is_active = true
-				AND d.type IN ('abstract', 'paper')
-				AND d.date = (
-					SELECT MIN(d2.date) FROM deadlines d2
-					WHERE d2.event_id = events.id
-						AND d2.is_active = true
-						AND d2.type IN ('abstract', 'paper')
-				)
-				AND EXTRACT(MONTH FROM d.date) = ?
-				AND EXTRACT(YEAR FROM d.date) = ?
-		)`, *filter.FirstDeadlineMonth, filter.Year)
+		if filter.Year != nil {
+			db = db.Where(`EXISTS (
+				SELECT 1 FROM deadlines d
+				WHERE d.event_id = events.id
+					AND d.is_active = true
+					AND d.type IN ('abstract', 'paper')
+					AND d.date = (
+						SELECT MIN(d2.date) FROM deadlines d2
+						WHERE d2.event_id = events.id
+							AND d2.is_active = true
+							AND d2.type IN ('abstract', 'paper')
+					)
+					AND EXTRACT(MONTH FROM d.date) = ?
+					AND EXTRACT(YEAR FROM d.date) >= ?
+			)`, *filter.FirstDeadlineMonth, *filter.Year)
+		} else {
+			db = db.Where(`EXISTS (
+				SELECT 1 FROM deadlines d
+				WHERE d.event_id = events.id
+					AND d.is_active = true
+					AND d.type IN ('abstract', 'paper')
+					AND d.date = (
+						SELECT MIN(d2.date) FROM deadlines d2
+						WHERE d2.event_id = events.id
+							AND d2.is_active = true
+							AND d2.type IN ('abstract', 'paper')
+					)
+					AND EXTRACT(MONTH FROM d.date) = ?
+			)`, *filter.FirstDeadlineMonth)
+		}
 	}
 	return db
 }

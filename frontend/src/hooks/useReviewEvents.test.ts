@@ -143,6 +143,31 @@ describe("useReviewEvents", () => {
       expect(calledWith).toMatchObject({ page: 1 })
     })
 
+    // Spec: year-filter-from-semantics.md — setDraftYear(undefined) clears year filter
+    it("setDraftYear(undefined) clears year in draft and omits year from request on apply", async () => {
+      vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+      const { result } = renderHook(() => useReviewEvents(2026))
+
+      await waitFor(() => expect(result.current.phase).toBe("ready"))
+      vi.mocked(listEvents).mockClear()
+
+      act(() => {
+        result.current.setDraftYear(undefined)
+      })
+
+      vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })
+
+      act(() => {
+        result.current.apply()
+      })
+
+      await waitFor(() => expect(result.current.phase).toBe("ready"))
+
+      const calledWith = vi.mocked(listEvents).mock.calls[0][0]
+      expect(calledWith).not.toHaveProperty("year")
+    })
+
     // Spec: "tier=all → omit tier param from request entirely"
     it("omits tier from the request when draft tier is undefined (all)", async () => {
       vi.mocked(listEvents).mockResolvedValue({ data: [], meta: { page: 1, total: 0 } })

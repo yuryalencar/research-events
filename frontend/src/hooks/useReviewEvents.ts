@@ -8,7 +8,7 @@ import type { EventListItem, EventStatus, EventTier, ApiMeta, ListEventsParams }
 interface ReviewFilters {
   status: EventStatus
   tier: EventTier | undefined
-  year: number
+  year: number | undefined
 }
 
 type ReviewPhase = "loading" | "ready" | "error"
@@ -24,7 +24,7 @@ interface UseReviewEventsReturn {
   draftFilters: ReviewFilters
   setDraftStatus: (status: EventStatus) => void
   setDraftTier: (tier: EventTier | undefined) => void
-  setDraftYear: (year: number) => void
+  setDraftYear: (year: number | undefined) => void
   apply: () => void
   page: number
   goToPage: (page: number) => void
@@ -68,11 +68,11 @@ function useReviewEvents(initialYear: number): UseReviewEventsReturn {
 
     const params: ListEventsParams = {
       status: fetchParams.status,
-      year: fetchParams.year,
       page: fetchParams.page,
       page_size: 30,
       pagination: "on",
     }
+    if (fetchParams.year !== undefined) params.year = fetchParams.year
     if (fetchParams.tier !== undefined) params.tier = fetchParams.tier
 
     listEvents(params)
@@ -109,7 +109,7 @@ function useReviewEvents(initialYear: number): UseReviewEventsReturn {
     setDraftFilters(next)
   }, [])
 
-  const setDraftYear = useCallback((year: number) => {
+  const setDraftYear = useCallback((year: number | undefined) => {
     const next = { ...draftFiltersRef.current, year }
     draftFiltersRef.current = next
     setDraftFilters(next)

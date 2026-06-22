@@ -7,28 +7,13 @@ const CURRENT_YEAR = 2026
 
 describe("useFilters", () => {
   // --- Initial state ---
-  // Spec: "year is always a number, never undefined" (Rules)
-  // Spec: "Initial value: current year" (Rules)
+  // Spec: "Default on page load: current year" (year-filter-from-semantics.md)
 
   it("initialises draft and applied year to currentYear", () => {
     const { result } = renderHook(() => useFilters(CURRENT_YEAR))
 
     expect(result.current.draftFilters.year).toBe(CURRENT_YEAR)
     expect(result.current.activeFilters.year).toBe(CURRENT_YEAR)
-  })
-
-  it("year in initial draft state is never undefined", () => {
-    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
-
-    expect(result.current.draftFilters.year).toBeDefined()
-    expect(typeof result.current.draftFilters.year).toBe("number")
-  })
-
-  it("year in initial applied state is never undefined", () => {
-    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
-
-    expect(result.current.activeFilters.year).toBeDefined()
-    expect(typeof result.current.activeFilters.year).toBe("number")
   })
 
   it("optional filters are undefined in initial state", () => {
@@ -49,6 +34,16 @@ describe("useFilters", () => {
     act(() => result.current.setYear(2025))
 
     expect(result.current.draftFilters.year).toBe(2025)
+    expect(result.current.activeFilters.year).toBe(CURRENT_YEAR)
+  })
+
+  it("setYear(undefined) clears draft year to undefined", () => {
+    // Spec: year-filter-from-semantics.md — clearing year sets it to undefined (all events)
+    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
+
+    act(() => result.current.setYear(undefined))
+
+    expect(result.current.draftFilters.year).toBeUndefined()
     expect(result.current.activeFilters.year).toBe(CURRENT_YEAR)
   })
 
@@ -88,15 +83,6 @@ describe("useFilters", () => {
     expect(result.current.activeFilters.firstDeadlineMonth).toBeUndefined()
   })
 
-  it("year in draft never becomes undefined after setYear", () => {
-    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
-
-    act(() => result.current.setYear(2020))
-
-    expect(result.current.draftFilters.year).toBeDefined()
-    expect(typeof result.current.draftFilters.year).toBe("number")
-  })
-
   // --- apply ---
   // Spec: "Apply button: copies draft → applied filters → triggers re-fetch" (Behaviour)
 
@@ -121,37 +107,33 @@ describe("useFilters", () => {
     })
   })
 
-  it("apply with year only and all optional filters undefined is valid", () => {
-    // Spec border case: "Apply with year only (all optional filters cleared) is valid"
+  it("apply with undefined year propagates undefined to applied", () => {
+    // Spec: year-filter-from-semantics.md — applying with no year fetches all events
     const { result } = renderHook(() => useFilters(CURRENT_YEAR))
 
+    act(() => result.current.setYear(undefined))
     act(() => result.current.apply())
 
-    expect(result.current.activeFilters.year).toBe(CURRENT_YEAR)
-    expect(result.current.activeFilters.domain).toBeUndefined()
-    expect(result.current.activeFilters.tier).toBeUndefined()
-    expect(result.current.activeFilters.country).toBeUndefined()
-    expect(result.current.activeFilters.firstDeadlineMonth).toBeUndefined()
-  })
-
-  it("year in applied never becomes undefined after apply", () => {
-    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
-
-    act(() => result.current.setYear(2020))
-    act(() => result.current.apply())
-
-    expect(result.current.activeFilters.year).toBeDefined()
-    expect(typeof result.current.activeFilters.year).toBe("number")
+    expect(result.current.activeFilters.year).toBeUndefined()
   })
 
   // --- reset ---
-  // Spec (revised): "Reset button restores the draft form to defaults but does
-  // NOT apply — the user must still click Apply to trigger a re-fetch." (Behaviour)
+  // Spec: "reset() restores year to current year" (year-filter-from-semantics.md)
 
   it("reset restores draft year to currentYear", () => {
     const { result } = renderHook(() => useFilters(CURRENT_YEAR))
 
     act(() => result.current.setYear(2020))
+    act(() => result.current.reset())
+
+    expect(result.current.draftFilters.year).toBe(CURRENT_YEAR)
+  })
+
+  it("reset restores draft year to currentYear when it was cleared to undefined", () => {
+    // Spec: year-filter-from-semantics.md — reset() always returns to currentYear default
+    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
+
+    act(() => result.current.setYear(undefined))
     act(() => result.current.reset())
 
     expect(result.current.draftFilters.year).toBe(CURRENT_YEAR)
@@ -164,7 +146,6 @@ describe("useFilters", () => {
     act(() => result.current.apply())
     act(() => result.current.reset())
 
-    // active should still reflect what was applied before the reset
     expect(result.current.activeFilters.year).toBe(2020)
   })
 
@@ -195,18 +176,8 @@ describe("useFilters", () => {
     act(() => result.current.apply())
     act(() => result.current.reset())
 
-    // active should still reflect what was applied before the reset
     expect(result.current.activeFilters.domain).toBe("computer_science")
     expect(result.current.activeFilters.tier).toBe("A")
-  })
-
-  it("year in applied never becomes undefined after reset", () => {
-    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
-
-    act(() => result.current.reset())
-
-    expect(result.current.activeFilters.year).toBeDefined()
-    expect(typeof result.current.activeFilters.year).toBe("number")
   })
 
   // --- isDirty ---
@@ -222,6 +193,15 @@ describe("useFilters", () => {
     const { result } = renderHook(() => useFilters(CURRENT_YEAR))
 
     act(() => result.current.setYear(2025))
+
+    expect(result.current.isDirty).toBe(true)
+  })
+
+  it("isDirty is true when year is cleared to undefined", () => {
+    // Spec: year-filter-from-semantics.md — undefined year differs from currentYear default
+    const { result } = renderHook(() => useFilters(CURRENT_YEAR))
+
+    act(() => result.current.setYear(undefined))
 
     expect(result.current.isDirty).toBe(true)
   })
@@ -246,14 +226,12 @@ describe("useFilters", () => {
   it("isDirty is false after reset when active was never changed", () => {
     const { result } = renderHook(() => useFilters(CURRENT_YEAR))
 
-    // draft changes but never applied, so active is still at defaults
     act(() => {
       result.current.setYear(2025)
       result.current.setDomain("computer_science")
     })
     act(() => result.current.reset())
 
-    // draft returned to defaults; active was already at defaults → not dirty
     expect(result.current.isDirty).toBe(false)
   })
 
@@ -262,7 +240,6 @@ describe("useFilters", () => {
 
     act(() => result.current.setDomain("computer_science"))
     act(() => result.current.apply())
-    // draft now back to defaults, but active still has domain set
     act(() => result.current.reset())
 
     expect(result.current.isDirty).toBe(true)

@@ -69,6 +69,8 @@ type eventListItemResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+func intPtr(n int) *int { return &n }
+
 func listReq(target string) *http.Request {
 	return httptest.NewRequest(http.MethodGet, target, nil)
 }
@@ -83,16 +85,14 @@ func decodeListResponse(t *testing.T, rec *httptest.ResponseRecorder) listRespon
 // --- List ---
 
 func TestEventHandler_List_NoParams_UsesDefaultFilters(t *testing.T) {
-	// Spec: events-list.yaml border_case "No filters at all → status=approved,
-	// year=current year, page=1, page_size=20."
+	// Spec: events-list-year-from-semantics.yaml — no filters → status=approved,
+	// year=nil (no year constraint), page=1, page_size=20.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	currentYear := time.Now().Year()
-
 	repo := mocks.NewMockEventRepository(ctrl)
 	repo.EXPECT().ListEvents(gomock.Any(), repository.ListEventsFilter{
-		Year: currentYear, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: nil, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	}).Return([]model.Event{}, int64(0), nil)
 
 	h := handler.NewEventHandler(repo, testLogger)
@@ -137,7 +137,7 @@ func TestEventHandler_List_QueryParams_AreParsedAndPassedToFilter(t *testing.T) 
 
 	repo := mocks.NewMockEventRepository(ctrl)
 	repo.EXPECT().ListEvents(gomock.Any(), repository.ListEventsFilter{
-		Year: 2025, Status: model.EventStatusPending,
+		Year: intPtr(2025), Status: model.EventStatusPending,
 		Domain: &domain, Country: &country, Tier: &tier,
 		FirstDeadlineMonth: &month,
 		BBox:               &repository.BBoxFilter{MinLng: -10, MinLat: -5, MaxLng: 10, MaxLat: 5},
@@ -159,11 +159,9 @@ func TestEventHandler_List_PaginationOff_SetsMetaPageToOne(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	currentYear := time.Now().Year()
-
 	repo := mocks.NewMockEventRepository(ctrl)
 	repo.EXPECT().ListEvents(gomock.Any(), repository.ListEventsFilter{
-		Year: currentYear, Status: model.EventStatusApproved, Page: 1, PaginationOff: true,
+		Year: nil, Status: model.EventStatusApproved, Page: 1, PaginationOff: true,
 	}).Return([]model.Event{{}, {}}, int64(2), nil)
 
 	h := handler.NewEventHandler(repo, testLogger)
@@ -231,11 +229,9 @@ func TestEventHandler_List_RepositoryError_ReturnsInternalError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	currentYear := time.Now().Year()
-
 	repo := mocks.NewMockEventRepository(ctrl)
 	repo.EXPECT().ListEvents(gomock.Any(), repository.ListEventsFilter{
-		Year: currentYear, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
+		Year: nil, Status: model.EventStatusApproved, Page: 1, PageSize: 20,
 	}).Return(nil, int64(0), assert.AnError)
 
 	h := handler.NewEventHandler(repo, testLogger)

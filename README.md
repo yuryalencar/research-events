@@ -190,6 +190,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-21 | [Update User Password — Backend](ai-sessions/2026-06-21-update-user-password-feature.md) | `PATCH /api/v1/users/me/password` — authenticated, rate-limited (10/min). Validates current password, complexity (8+ chars, upper, lower, special), hashes with bcrypt cost 12. FP service layer: 3 pure functions. Also fixed stale test DB (truncated committed rows that broke `ListEvents_*` integration tests). 401 tests. |
 | 2026-06-21 | [Session Guard + Eager Token Validation](ai-sessions/2026-06-21-session-guard-eager-token-validation.md) | Bug fixes: double-namespace `errors.errors.TOKEN_MISSING` (root-level `t` in UpdatePasswordCard), auth error redirect from update-password hook (`onAuthError` callback). New: `GET /api/v1/users/me` (no DB, JWT context only), `validateSession()`, `useSessionGuard` hook applied to all 6 protected pages. 277 frontend tests, full backend suite passes. |
 | 2026-06-22 | [Language Selector (Frontend)](ai-sessions/2026-06-22-language-selector-feature.md) | Fixed bottom-right flag button on every page — switches between 🇺🇸 English, 🇧🇷 Português, 🇪🇸 Español, 🇩🇪 Deutsch while preserving the current URL path. Created `src/i18n/navigation.ts` (missing `createNavigation` module for next-intl v4 locale-aware routing). |
+| 2026-06-22 | [Year Filter: "From Year" Semantics](ai-sessions/2026-06-22-year-filter-from-semantics.md) | `?year=2026` now returns year >= 2026; omitting year returns all events. Backend: `*int` nullable year + updated `firstDeadlineMonth` subquery. Frontend: `number \| undefined` year type, globe locks year (min = currentYear−2), submission page min = currentYear, "From year" label in all 4 locales. 278 tests. |
 
 ## Specs
 
@@ -224,6 +225,8 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Users: Update Password | [users-update-password.yaml](specs/backend/users-update-password.yaml) | Done |
 | Users: Get Current Session (Me) | [users-me.yaml](specs/backend/users-me.yaml) | Done |
 | Language Selector (Frontend) | [language-selector.md](specs/frontend/language-selector.md) | Done |
+| Events: Year filter — "from year" semantics (Backend) | [events-list-year-from-semantics.yaml](specs/backend/events-list-year-from-semantics.yaml) | Done |
+| Year filter — "from year" semantics (Frontend) | [year-filter-from-semantics.md](specs/frontend/year-filter-from-semantics.md) | Done |
 
 ---
 

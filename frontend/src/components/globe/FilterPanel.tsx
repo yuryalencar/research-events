@@ -4,7 +4,7 @@ import type { JSX } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 
-import { MIN_FILTER_YEAR, DOMAINS, TIERS } from "@/lib/constants"
+import { DOMAINS, TIERS } from "@/lib/constants"
 import { COUNTRIES } from "@/lib/countries"
 import type { UseFiltersReturn } from "@/hooks/useFilters"
 
@@ -21,8 +21,8 @@ const DESKTOP_QUERY = "(min-width: 768px)"
 
 function FilterPanel({ filters }: FilterPanelProps): JSX.Element {
   const t = useTranslations("filters")
-  // locale from next-intl (e.g. "pt", "de") so month names match the UI language.
   const locale = useLocale()
+  const minYear = new Date().getFullYear() - 2
 
   // The panel starts expanded on desktop and collapsed on mobile, but only
   // after mount (SSR snapshot always returns false, so we can't use
@@ -112,17 +112,19 @@ function FilterPanel({ filters }: FilterPanelProps): JSX.Element {
               <button
                 type="button"
                 aria-label={t("prevYear")}
-                disabled={draftFilters.year <= MIN_FILTER_YEAR}
-                onClick={() => setYear(draftFilters.year - 1)}
+                disabled={(draftFilters.year ?? minYear) <= minYear}
+                onClick={() => setYear((draftFilters.year ?? minYear) - 1)}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-100 text-gray-700 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ‹
               </button>
-              <span className="flex-1 text-center text-sm font-medium text-gray-800">{draftFilters.year}</span>
+              <span className="flex-1 text-center text-sm font-medium text-gray-800">
+                {draftFilters.year ?? new Date().getFullYear()}
+              </span>
               <button
                 type="button"
                 aria-label={t("nextYear")}
-                onClick={() => setYear(draftFilters.year + 1)}
+                onClick={() => setYear((draftFilters.year ?? new Date().getFullYear()) + 1)}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-100 text-gray-700 transition hover:bg-gray-200"
               >
                 ›
