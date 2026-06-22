@@ -25,8 +25,9 @@ features (submission form, admin review, etc.) will build on.
 ### `lib/api/client.ts` — low-level request functions
 
 - `apiRequest<T>(path, init?)` — public request. Prepends
-  `NEXT_PUBLIC_API_URL`, sets `Content-Type: application/json` for bodies with
-  content, parses the JSON envelope.
+  `NEXT_PUBLIC_API_URL` (empty in production — Next.js rewrites handle routing;
+  set to `http://localhost:8080` in local dev for direct backend calls), sets
+  `Content-Type: application/json` for bodies with content, parses the JSON envelope.
   - 2xx → returns `data` (and `meta` when present) typed as `T`
   - non-2xx → throws `ApiError` (see below)
   - `fetch` itself rejects (no network) → throws `ApiError` with code `"NETWORK_ERROR"`, `status: 0`
@@ -232,3 +233,60 @@ python3 -m http.server 9999 &
 NEXT_PUBLIC_API_URL=http://localhost:9999 pnpm dev
 # Navigate to the globe — toast will say "Something went wrong on our end."
 ```
+
+## bug_fix: Chrome third-party cookie blocking caused TOKEN_MISSING on all authenticated requests
+
+**Symptom:** After a successful login (`LOGIN_SUCCESS`, cookies visible in
+DevTools → Application → Cookies), every authenticated request (e.g.
+`GET /api/v1/users/me`) returned `401 TOKEN_MISSING`. The `/me` request
+headers had no `Cookie` field. Chrome DevTools showed
+`sec-fetch-storage-access: none` and `sec-fetch-site: cross-site` on the
+request, confirming Chrome was actively blocking cookie transmission.
+
+**Root cause:** The frontend (`research-events.vercel.app`) and backend
+(`research-events.onrender.com`) are on different domains. Even with
+`SameSite=None; Secure` on the cookies and correct CORS headers, Chrome's
+third-party cookie phase-out (`sec-fetch-storage-access: none`) prevented
+the browser from attaching stored cookies to cross-site fetch requests.
+`SameSite=None` opts the cookie into cross-site use, but Chrome's
+third-party cookie restrictions operate above the SameSite layer and override
+it for requests without explicit Storage Access API grants.
+
+This was invisible in local development because `localhost` is treated as a
+first-party origin regardless of port, so the cookie restriction never fired.
+
+**Fix:** Added Next.js rewrites in `frontend/next.config.ts`. The browser
+now calls `/api/...` on the Vercel domain (same-origin). Vercel proxies
+those requests to the Render backend server-side. Because the browser never
+makes a cross-site request, the third-party cookie restriction never applies:
+
+```
+Before:  browser → research-events.onrender.com/api/v1/users/me  (cross-site, cookie blocked)
+After:   browser → research-events.vercel.app/api/v1/users/me    (same-origin, cookie sent)
+            Vercel rewrites → research-events.onrender.com/api/v1/users/me  (server-side, Cookie header forwarded)
+```
+
+The cookies are now stored on `research-events.vercel.app` (since the
+browser sees Set-Cookie responses as coming from Vercel) and sent back to
+`research-events.vercel.app` freely. No changes to `client.ts` were needed —
+`NEXT_PUBLIC_API_URL` remains empty in production so API paths are relative,
+and the rewrite destination is controlled by `BACKEND_URL` (server-side env
+var, never exposed to the browser).
+
+**Required env vars on Vercel:**
+```
+BACKEND_URL=https://research-events.onrender.com   # rewrite destination (server-side)
+NEXT_PUBLIC_API_URL=                                # empty — client uses relative paths
+```
+
+**Local dev is unchanged:** `BACKEND_URL` is not set locally → rewrites
+return `[]` → no-op. `NEXT_PUBLIC_API_URL=http://localhost:8080` in `.env`
+continues to work as before (direct calls; localhost bypasses third-party
+cookie restrictions).
+
+**How to verify:**
+1. Deploy to Vercel with `BACKEND_URL` set.
+2. Log in — open DevTools → Network → `/me` request.
+3. Request Headers must include `Cookie: access_token=...`.
+4. `sec-fetch-site` must be `same-origin` (not `cross-site`).
+5. Response must be `200` with user data, not `401 TOKEN_MISSING`.
