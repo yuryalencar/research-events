@@ -12,8 +12,8 @@
 -- to any environment without overwriting an existing account with the same email.
 INSERT INTO users (name, email, password_hash, role, created_at, updated_at)
 VALUES
-    ('Yury Lima', 'yuryalencar19@gmail.com', '$2a$12$6M29K50REtiPE5pSD7jFU.Jwq1iVJvdu.wX98NmqwFJEW7EpHdSA6', 'admin', NOW(), NOW()),
-    ('Default Moderator', 'moderator@example.com', '$2a$12$hDAklqAYozhNJC6uCCIGp.gH6HzRGH51rSs/ecnkxLggyoM9OwL86', 'moderator', NOW(), NOW())
+    ('Yury Lima', 'yuryalencar19@gmail.com', '$2a$12$.chn8CW74eRM/uE9.S1I9eYZR.jt0CdPLuAPclVKBHZDOVHqQ44pW', 'admin', NOW(), NOW()),
+    ('Default Moderator', 'moderator@example.com', '$2a$12$DoAkpeLQwOrDtejOHxZJhu0dTbjGQVd6VETmIbzzG/TpcVBT.D0Ba', 'moderator', NOW(), NOW())
 ON CONFLICT (email) DO NOTHING;
 
 -- +goose StatementEnd
