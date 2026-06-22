@@ -2,6 +2,7 @@
 
 import type { JSX, FormEvent } from "react"
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
 import { Eye, EyeOff } from "lucide-react"
@@ -86,9 +87,9 @@ export default function ManageLoginPage(): JSX.Element {
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4">
       {/* Login card */}
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-2xl font-semibold tracking-tight text-foreground">
-          {t("title")}
-        </h1>
+        <div className="mb-6 flex justify-center">
+          <Image src="/logo-with-opensource.png" alt="ReSEARCH Events" width={325} height={130} style={{ width: 305, height: "auto" }} />
+        </div>
 
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           {/* Email field */}

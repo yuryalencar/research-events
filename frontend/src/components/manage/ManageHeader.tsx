@@ -2,6 +2,7 @@
 
 import type { JSX } from "react"
 import { useState, useEffect, useRef } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
 
@@ -50,14 +51,25 @@ function ManageHeader({ userName, userRole, onSignOut }: ManageHeaderProps): JSX
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-card shadow-sm">
       <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
-      {/* Welcome heading + role — truncates on narrow screens */}
-      <div className="flex max-w-[60%] flex-col">
-        <span className="truncate text-sm font-semibold text-foreground sm:text-base">
-          {t("dashboard.welcomeHeading", { name: userName })}
-        </span>
-        <span className="truncate text-xs capitalize text-muted-foreground">
-          {userRole}
-        </span>
+      {/* Globe logo + welcome heading */}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <button
+          type="button"
+          onClick={() => router.push(`/${locale}/manage`)}
+          className="shrink-0 transition-opacity hover:opacity-80"
+          aria-label="Go to manage home"
+        >
+          <Image src="/logo-globe.png" alt="ReSEARCH Events" width={56} height={56} />
+        </button>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-semibold text-foreground sm:text-base">
+            {t("dashboard.welcomeHeading", { name: userName })}
+          </span>
+          <span className="truncate text-xs capitalize text-muted-foreground">
+            {userRole}
+          </span>
+        </div>
       </div>
 
       {/* Avatar + dropdown */}
