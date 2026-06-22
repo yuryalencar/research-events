@@ -29,7 +29,8 @@ features (submission form, admin review, etc.) will build on.
   content, parses the JSON envelope.
   - 2xx → returns `data` (and `meta` when present) typed as `T`
   - non-2xx → throws `ApiError` (see below)
-  - network failure / non-JSON body → throws `ApiError` with code `"NETWORK_ERROR"`
+  - `fetch` itself rejects (no network) → throws `ApiError` with code `"NETWORK_ERROR"`, `status: 0`
+  - server responds but body is not valid JSON → throws `ApiError` with code `"INTERNAL_ERROR"`, `status: <HTTP status>`
 - `apiPrivateRequest<T>(path, init?)` — same as above, plus:
   - `credentials: "include"` (sends the HTTP-only `access_token` /
     `refresh_token` cookies)
@@ -160,8 +161,10 @@ is a deliberate, temporary exception to the "never hand-write API types" rule.
 - Backend returns a `code` not in the table above (e.g. a new code added
   later without a frontend update) → `errors.UNKNOWN`.
 - `fetch` itself throws (offline, DNS failure, CORS) → `ApiError("NETWORK_ERROR", 0, ...)` → `errors.NETWORK_ERROR`.
-- Response body is not valid JSON (e.g. backend returns an HTML error page) →
-  treated as `NETWORK_ERROR` (can't read `code`/`message`).
+- Response body is not valid JSON (e.g. a proxy/CDN returns an HTML error page) →
+  `ApiError("INTERNAL_ERROR", <HTTP status>, ...)` → `errors.INTERNAL_ERROR`.
+  The connection succeeded; `NETWORK_ERROR` would wrongly tell the user to check
+  their internet. The HTTP status is preserved so callers can inspect it.
 - `apiPrivateRequest` gets `401 TOKEN_EXPIRED` → refresh succeeds → retried
   request still fails (e.g. `403 FORBIDDEN`, the user's role changed) → the
   **second** error (`FORBIDDEN`) is thrown, not the original `TOKEN_EXPIRED`.
@@ -191,3 +194,41 @@ is a deliberate, temporary exception to the "never hand-write API types" rule.
 - [ ] `messages/pt.json`, `es.json`, `de.json` mirror every `errors.*` key (translated, no missing keys)
 - [ ] Vitest tests cover every row of Error cases + Border/corner cases above
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` all pass
+
+## bug_fix: non-JSON server response incorrectly mapped to NETWORK_ERROR
+
+**Symptom:** On the globe page, when the backend (or a proxy in front of it)
+returned a non-JSON response (e.g. a 404 HTML page from Vercel's CDN during
+deployment), the error toast read "Não foi possível conectar ao servidor.
+Verifique sua conexão e tente novamente." — a message that tells the user to
+check their internet connection, even though the connection was fine.
+
+**Root cause:** `sendRequest` in `lib/api/client.ts` caught the `response.json()`
+parse failure and threw `ApiError("NETWORK_ERROR", 0, ...)`. The `0` status
+and `NETWORK_ERROR` code are the right signal for a true network failure
+(`fetch` rejecting), but not for a response that arrived successfully and just
+had a non-JSON body.
+
+**Fix:** Changed the `response.json()` catch block to throw
+`ApiError("INTERNAL_ERROR", response.status, ...)` instead. The HTTP status
+is now preserved. `NETWORK_ERROR` is reserved exclusively for the outer
+`fetch` catch (request never reached the server). Applied the same correction
+to the missing-`meta` guard in `apiRequestWithMeta`.
+
+**How to verify:**
+1. Point `NEXT_PUBLIC_API_URL` at a URL that returns a non-JSON 502/404.
+2. Load the globe page — toast should read the `INTERNAL_ERROR` message
+   ("Algo deu errado do nosso lado. Tente novamente mais tarde." in pt),
+   not the `NETWORK_ERROR` message.
+3. Disconnect the network entirely — toast should still show the
+   `NETWORK_ERROR` message.
+
+**curl that proves the fix (simulate a non-JSON 404 via a stopped backend):**
+```bash
+# Start a server that always returns HTML 404
+python3 -m http.server 9999 &
+
+# This should show INTERNAL_ERROR in the UI, not NETWORK_ERROR
+NEXT_PUBLIC_API_URL=http://localhost:9999 pnpm dev
+# Navigate to the globe — toast will say "Something went wrong on our end."
+```
