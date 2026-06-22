@@ -1,5 +1,9 @@
 # ReSEARCH Events
 
+<p align="center">
+  <img src="frontend/public/logo-with-opensource.png" alt="ReSEARCH Events logo" width="400" />
+</p>
+
 A collaborative, open-source platform that aggregates research conferences and events in software engineering and computer science. Researchers can discover events on an interactive 3D globe, filter by year and location, and submit new events for admin review.
 
 ---
