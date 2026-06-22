@@ -47,7 +47,7 @@ describe("apiRequest", () => {
     await expect(apiRequest("/api/v1/events/999")).rejects.toBeInstanceOf(ApiError)
   })
 
-  it("throws a NETWORK_ERROR ApiError when the response body is not valid JSON", async () => {
+  it("throws an INTERNAL_ERROR ApiError when the response body is not valid JSON", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response("<html>502 Bad Gateway</html>", {
         status: 502,
@@ -56,8 +56,8 @@ describe("apiRequest", () => {
     )
 
     await expect(apiRequest("/api/v1/events")).rejects.toMatchObject({
-      code: "NETWORK_ERROR",
-      status: 0,
+      code: "INTERNAL_ERROR",
+      status: 502,
     })
   })
 

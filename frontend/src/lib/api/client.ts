@@ -64,7 +64,11 @@ async function sendRequest<T>(path: string, init?: RequestInit): Promise<ApiSucc
   try {
     body = await response.json()
   } catch {
-    throw new ApiError("NETWORK_ERROR", 0, "received a non-JSON response from the server")
+    // The server responded (connection was fine) but the body was not JSON —
+    // a proxy or CDN likely swallowed the request and returned an HTML error
+    // page. INTERNAL_ERROR is the right signal; NETWORK_ERROR would wrongly
+    // tell the user to check their internet connection.
+    throw new ApiError("INTERNAL_ERROR", response.status, "received a non-JSON response from the server")
   }
 
   if (!response.ok) {
@@ -104,7 +108,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 async function apiRequestWithMeta<T>(path: string, init?: RequestInit): Promise<{ data: T; meta: ApiMeta }> {
   const envelope = await sendRequest<T>(path, init)
   if (!envelope.meta) {
-    throw new ApiError("NETWORK_ERROR", 0, "expected a list response with pagination meta")
+    throw new ApiError("INTERNAL_ERROR", 0, "expected a list response with pagination meta")
   }
   return { data: envelope.data, meta: envelope.meta }
 }
