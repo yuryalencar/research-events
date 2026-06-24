@@ -2,6 +2,38 @@
 
 ---
 
+## v0.1.2 — June 24, 2026
+
+### Globe Loading Message Progression
+
+Improves the loading experience on the globe homepage when the backend is cold-starting on Render's free tier (which spins down after 15 minutes of inactivity). Instead of a static "Loading events…" label, users now see a sequence of messages that communicate the delay and keep them on the page.
+
+**Hook**
+- New `useLoadingMessage(isLoading, { messages, initialDelay?, interval? })` hook in `hooks/useLoadingMessage.ts`
+- Message 1 appears immediately when loading starts
+- After 2 500 ms, advances to message 2; then advances every 1 000 ms until the last message
+- Stays on the last message — no looping
+- All timers reset when `isLoading` flips back to `true` (new filter fetch), and are cleared when it becomes `false` or the component unmounts
+
+**Message sequence**
+
+| Step | Delay from start | English text |
+|---|---|---|
+| 1 | 0 ms | "Loading events…" |
+| 2 | 2 500 ms | "Waking up our server…" |
+| 3 | 3 500 ms | "First load takes a moment…" |
+| 4 | 4 500 ms | "Almost there, hang tight…" |
+
+**Internationalisation**
+- The existing `home.loading` key is replaced by `home.loadingStep1`–`home.loadingStep4`
+- All four keys present in all 4 locales: English, Portuguese, Spanish, German
+- No other translation files affected
+
+**Styling**
+- Loading overlay container, spinner, and text style are unchanged
+
+---
+
 ## v0.1.1 — June 24, 2026
 
 ### Globe Event Clustering
