@@ -195,6 +195,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-21 | [Session Guard + Eager Token Validation](ai-sessions/2026-06-21-session-guard-eager-token-validation.md) | Bug fixes: double-namespace `errors.errors.TOKEN_MISSING` (root-level `t` in UpdatePasswordCard), auth error redirect from update-password hook (`onAuthError` callback). New: `GET /api/v1/users/me` (no DB, JWT context only), `validateSession()`, `useSessionGuard` hook applied to all 6 protected pages. 277 frontend tests, full backend suite passes. |
 | 2026-06-22 | [Language Selector (Frontend)](ai-sessions/2026-06-22-language-selector-feature.md) | Fixed bottom-right flag button on every page — switches between 🇺🇸 English, 🇧🇷 Português, 🇪🇸 Español, 🇩🇪 Deutsch while preserving the current URL path. Created `src/i18n/navigation.ts` (missing `createNavigation` module for next-intl v4 locale-aware routing). |
 | 2026-06-22 | [Year Filter: "From Year" Semantics](ai-sessions/2026-06-22-year-filter-from-semantics.md) | `?year=2026` now returns year >= 2026; omitting year returns all events. Backend: `*int` nullable year + updated `firstDeadlineMonth` subquery. Frontend: `number \| undefined` year type, globe locks year (min = currentYear−2), submission page min = currentYear, "From year" label in all 4 locales. 278 tests. |
+| 2026-06-24 | [Globe Event Clustering (Frontend)](ai-sessions/2026-06-24-globe-event-clustering.md) | `supercluster` groups nearby pins into violet cluster pins (dynamic, zoom-aware); clicking opens a multi-event drawer immediately. New `useGlobeClusters` hook, `altitudeToZoom` pure function, `ClusterEventDrawer` (Dialog/Drawer responsive). InfoModal violet legend row. 4 new i18n keys across all locales. 299 tests. |
 
 ## Specs
 
@@ -231,6 +232,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Language Selector (Frontend) | [language-selector.md](specs/frontend/language-selector.md) | Done |
 | Events: Year filter — "from year" semantics (Backend) | [events-list-year-from-semantics.yaml](specs/backend/events-list-year-from-semantics.yaml) | Done |
 | Year filter — "from year" semantics (Frontend) | [year-filter-from-semantics.md](specs/frontend/year-filter-from-semantics.md) | Done |
+| Globe Event Clustering (Frontend) | [globe-event-clustering.md](specs/frontend/globe-event-clustering.md) | Done |
 
 ---
 

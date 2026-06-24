@@ -10,6 +10,7 @@ import type { EventListItem, EventTier } from "@/types/api"
 const PIN_COLOR_DEFAULT = "#facc15"
 const PIN_COLOR_SELECTED = "#ec4899"
 const PIN_COLOR_PAST = "#ef4444"
+const PIN_COLOR_CLUSTER = "#a78bfa"
 
 // --- Pure helpers ---
 
@@ -32,6 +33,15 @@ function shouldShowUpdatedBy(event: EventListItem): boolean {
 function isEventPast(endDate: string, now: Date): boolean {
   const end = new Date(`${endDate}T00:00:00Z`)
   return end.getTime() < now.getTime()
+}
+
+// getClusterPinRadius maps an event count to a globe.gl point radius so that
+// larger clusters are visually bigger than smaller ones or individual pins.
+function getClusterPinRadius(count: number): number {
+  if (count >= 11) return 3.0
+  if (count >= 6) return 2.4
+  if (count >= 3) return 1.8
+  return 1.4
 }
 
 // getPinColor returns the color a pin should be rendered with: highlighted
@@ -82,7 +92,9 @@ export {
   getPinColor,
   isEventPast,
   formatDateRange,
+  getClusterPinRadius,
   PIN_COLOR_DEFAULT,
   PIN_COLOR_SELECTED,
   PIN_COLOR_PAST,
+  PIN_COLOR_CLUSTER,
 }

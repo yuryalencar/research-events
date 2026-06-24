@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { AddEventButton } from "@/components/globe/AddEventButton"
+import { ClusterEventDrawer } from "@/components/globe/ClusterEventDrawer"
 import { EventDetailView } from "@/components/events/EventDetailView"
 import { EventTableView } from "@/components/events/EventTableView"
 import { FilterPanel } from "@/components/globe/FilterPanel"
@@ -14,8 +15,10 @@ import { InfoButton } from "@/components/globe/InfoButton"
 import { ViewToggleButton } from "@/components/globe/ViewToggleButton"
 import { useEvents } from "@/hooks/useEvents"
 import { useFilters } from "@/hooks/useFilters"
+import { useGlobeClusters } from "@/hooks/useGlobeClusters"
 import { useSelectedEvent } from "@/hooks/useSelectedEvent"
 import { useViewMode } from "@/hooks/useViewMode"
+import type { EventListItem } from "@/types/api"
 
 // Globe.gl requires WebGL/browser APIs — must never be server-rendered (see
 // CLAUDE.md's Globe.gl/Leaflet rule).
@@ -40,6 +43,14 @@ export default function Page(): JSX.Element {
     activeFilters.country !== undefined ||
     activeFilters.firstDeadlineMonth !== undefined
 
+  // zoom is reported by GlobeView via onZoomChange after each camera settle.
+  // Initialised to 2, which matches globe.gl's default altitude of ~2.5.
+  const [zoom, setZoom] = useState(2)
+  const { globePoints, getClusterEvents } = useGlobeClusters(events, zoom)
+
+  // clusterEvents drives the multi-event drawer: null = closed, array = open.
+  const [clusterEvents, setClusterEvents] = useState<EventListItem[] | null>(null)
+
   const { selectedEvent, selectEvent, closeDetail } = useSelectedEvent(events)
 
   // When the viewport shrinks below md while in table mode, useViewMode calls
@@ -55,8 +66,28 @@ export default function Page(): JSX.Element {
   // a selected event on the globe has no meaning in the table view.
   const handleToggle = useCallback(() => {
     closeDetail()
+    setClusterEvents(null)
     toggleView()
   }, [closeDetail, toggleView])
+
+  const handleClusterClick = useCallback(
+    (clusterId: number) => {
+      setClusterEvents(getClusterEvents(clusterId))
+    },
+    [getClusterEvents],
+  )
+
+  const handleCloseClusterDrawer = useCallback(() => {
+    setClusterEvents(null)
+  }, [])
+
+  const handleClusterEventSelect = useCallback(
+    (event: EventListItem) => {
+      setClusterEvents(null)
+      selectEvent(event)
+    },
+    [selectEvent],
+  )
 
   // After filters are applied and the fetch completes, rotate the globe to the
   // first result. The ref skips the initial page-load fetch so the globe only
@@ -64,7 +95,12 @@ export default function Page(): JSX.Element {
   const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number } | null>(null)
   const isFirstLoad = useRef(true)
   useEffect(() => {
-    if (isLoading) return
+    // Close the cluster drawer as soon as a new filter fetch begins so stale
+    // cluster content is never shown after the event list changes.
+    if (isLoading) {
+      setClusterEvents(null)
+      return
+    }
     if (isFirstLoad.current) {
       isFirstLoad.current = false
       return
@@ -79,9 +115,11 @@ export default function Page(): JSX.Element {
       {viewMode === "globe" ? (
         <>
           <GlobeView
-            events={events}
+            globePoints={globePoints}
             selectedEvent={selectedEvent}
             onPointClick={selectEvent}
+            onClusterClick={handleClusterClick}
+            onZoomChange={setZoom}
             focusPoint={focusPoint}
           />
 
@@ -108,8 +146,13 @@ export default function Page(): JSX.Element {
             </div>
           )}
 
-          <InfoButton drawerOpen={selectedEvent !== null} />
+          <InfoButton drawerOpen={selectedEvent !== null || clusterEvents !== null} />
           <EventDetailView event={selectedEvent} onClose={closeDetail} />
+          <ClusterEventDrawer
+            events={clusterEvents}
+            onClose={handleCloseClusterDrawer}
+            onSelectEvent={handleClusterEventSelect}
+          />
         </>
       ) : (
         <EventTableView

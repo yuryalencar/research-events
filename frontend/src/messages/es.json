@@ -38,7 +38,11 @@
   "home": {
     "loading": "Cargando eventos…",
     "noEvents": "Aún no hay eventos registrados.",
-    "noEventsFiltered": "Ningún evento coincide con los filtros actuales. Intenta ajustarlos o restablecerlos."
+    "noEventsFiltered": "Ningún evento coincide con los filtros actuales. Intenta ajustarlos o restablecerlos.",
+    "cluster": {
+      "drawerTitle": "{count} eventos en esta área",
+      "eventCount": "{count} eventos"
+    }
   },
   "filters": {
     "title": "Filtros",
@@ -86,6 +90,10 @@
     "pinkPin": {
       "label": "Seleccionado",
       "description": "Conferencia actualmente seleccionada (marcador clicado)."
+    },
+    "violetPin": {
+      "label": "Grupo",
+      "description": "Varios eventos en la misma área — haz clic para ver la lista."
     },
     "howItWorksTitle": "Cómo se agregan los eventos",
     "howItWorksDescription": "Cualquier persona de la comunidad investigadora puede enviar una conferencia proporcionando su nombre, ubicación, fechas, sitio web y plazos. La solicitud entra en estado pendiente y luego es revisada por un moderador antes de aparecer en el globo. Los moderadores no pueden revisar eventos que ellos mismos enviaron, manteniendo el proceso justo e imparcial. ReSEARCH Events es una herramienta colaborativa creada para y por la comunidad investigadora.",

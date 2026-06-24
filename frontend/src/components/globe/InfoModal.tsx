@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer"
 import { ADMIN_EMAIL, APP_VERSION, GITHUB_PROFILE_URL, GITHUB_REPO_URL } from "@/lib/constants"
-import { PIN_COLOR_DEFAULT, PIN_COLOR_PAST, PIN_COLOR_SELECTED } from "@/lib/events"
+import { PIN_COLOR_DEFAULT, PIN_COLOR_PAST, PIN_COLOR_SELECTED, PIN_COLOR_CLUSTER } from "@/lib/events"
 
 // --- Types ---
 
@@ -78,6 +78,7 @@ function InfoModalContent(): JSX.Element {
         <PinLegendRow color={PIN_COLOR_DEFAULT} label={t("yellowPin.label")} description={t("yellowPin.description")} />
         <PinLegendRow color={PIN_COLOR_PAST} label={t("redPin.label")} description={t("redPin.description")} />
         <PinLegendRow color={PIN_COLOR_SELECTED} label={t("pinkPin.label")} description={t("pinkPin.description")} />
+        <PinLegendRow color={PIN_COLOR_CLUSTER} label={t("violetPin.label")} description={t("violetPin.description")} />
       </div>
 
       <hr className="border-border" />

@@ -38,7 +38,11 @@
   "home": {
     "loading": "Carregando eventos…",
     "noEvents": "Nenhum evento cadastrado ainda.",
-    "noEventsFiltered": "Nenhum evento corresponde aos filtros atuais. Tente ajustar ou redefinir os filtros."
+    "noEventsFiltered": "Nenhum evento corresponde aos filtros atuais. Tente ajustar ou redefinir os filtros.",
+    "cluster": {
+      "drawerTitle": "{count} eventos nesta área",
+      "eventCount": "{count} eventos"
+    }
   },
   "filters": {
     "title": "Filtros",
@@ -86,6 +90,10 @@
     "pinkPin": {
       "label": "Selecionada",
       "description": "Conferência atualmente selecionada (marcador clicado)."
+    },
+    "violetPin": {
+      "label": "Agrupamento",
+      "description": "Múltiplos eventos na mesma área — clique para ver a lista."
     },
     "howItWorksTitle": "Como os eventos são adicionados",
     "howItWorksDescription": "Qualquer pessoa da comunidade de pesquisa pode submeter uma conferência informando nome, local, datas, site e prazos. A submissão entra em estado pendente e é então revisada por um moderador antes de aparecer no globo. Moderadores não podem revisar eventos que eles mesmos enviaram, mantendo o processo justo e imparcial. O ReSEARCH Events é uma ferramenta colaborativa feita para e pela comunidade de pesquisa.",

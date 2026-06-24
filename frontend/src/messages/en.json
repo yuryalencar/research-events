@@ -38,7 +38,11 @@
   "home": {
     "loading": "Loading events…",
     "noEvents": "No events registered yet.",
-    "noEventsFiltered": "No events match the current filters. Try adjusting or resetting them."
+    "noEventsFiltered": "No events match the current filters. Try adjusting or resetting them.",
+    "cluster": {
+      "drawerTitle": "{count} events in this area",
+      "eventCount": "{count} events"
+    }
   },
   "filters": {
     "title": "Filters",
@@ -86,6 +90,10 @@
     "pinkPin": {
       "label": "Selected",
       "description": "Currently selected conference (clicked pin)."
+    },
+    "violetPin": {
+      "label": "Cluster",
+      "description": "Multiple events in the same area — click to see the list."
     },
     "howItWorksTitle": "How events are added",
     "howItWorksDescription": "Anyone in the research community can submit a conference by providing its name, location, dates, website, and deadlines. The submission enters a pending state and is then reviewed by a moderator before it becomes visible on the globe. Moderators cannot review events they submitted themselves, keeping the process fair and impartial. ReSEARCH Events is a collaborative tool built for and by the research community.",

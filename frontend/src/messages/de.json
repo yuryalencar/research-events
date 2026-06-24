@@ -38,7 +38,11 @@
   "home": {
     "loading": "Veranstaltungen werden geladen…",
     "noEvents": "Noch keine Veranstaltungen registriert.",
-    "noEventsFiltered": "Keine Veranstaltungen entsprechen den aktuellen Filtern. Versuche, sie anzupassen oder zurückzusetzen."
+    "noEventsFiltered": "Keine Veranstaltungen entsprechen den aktuellen Filtern. Versuche, sie anzupassen oder zurückzusetzen.",
+    "cluster": {
+      "drawerTitle": "{count} Veranstaltungen in dieser Region",
+      "eventCount": "{count} Veranstaltungen"
+    }
   },
   "filters": {
     "title": "Filter",
@@ -86,6 +90,10 @@
     "pinkPin": {
       "label": "Ausgewählt",
       "description": "Aktuell ausgewählte Konferenz (angeklickter Marker)."
+    },
+    "violetPin": {
+      "label": "Gruppe",
+      "description": "Mehrere Veranstaltungen in derselben Region — klicken, um die Liste zu sehen."
     },
     "howItWorksTitle": "Wie Veranstaltungen hinzugefügt werden",
     "howItWorksDescription": "Jeder aus der Forschungsgemeinschaft kann eine Konferenz einreichen, indem er Name, Ort, Termine, Webseite und Fristen angibt. Die Einreichung erhält den Status 'ausstehend' und wird dann von einem Moderator geprüft, bevor sie auf dem Globus erscheint. Moderatoren dürfen keine Veranstaltungen prüfen, die sie selbst eingereicht haben, um einen fairen und unparteiischen Prozess zu gewährleisten. ReSEARCH Events ist ein kollaboratives Werkzeug für und von der Forschungsgemeinschaft.",

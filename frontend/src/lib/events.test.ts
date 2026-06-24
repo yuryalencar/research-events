@@ -6,6 +6,7 @@ import {
   getPinColor,
   isEventPast,
   formatDateRange,
+  getClusterPinRadius,
   PIN_COLOR_DEFAULT,
   PIN_COLOR_SELECTED,
   PIN_COLOR_PAST,
@@ -94,6 +95,36 @@ describe("isEventPast", () => {
 
   it("returns false when the end date is after now", () => {
     expect(isEventPast("2026-05-05", new Date("2026-02-01T00:00:00Z"))).toBe(false)
+  })
+})
+
+describe("getClusterPinRadius", () => {
+  it("returns 1.4 for a cluster of exactly 2 events", () => {
+    expect(getClusterPinRadius(2)).toBe(1.4)
+  })
+
+  it("returns 1.8 for a cluster of 3 events (lower bound of 3–5 range)", () => {
+    expect(getClusterPinRadius(3)).toBe(1.8)
+  })
+
+  it("returns 1.8 for a cluster of 5 events (upper bound of 3–5 range)", () => {
+    expect(getClusterPinRadius(5)).toBe(1.8)
+  })
+
+  it("returns 2.4 for a cluster of 6 events (lower bound of 6–10 range)", () => {
+    expect(getClusterPinRadius(6)).toBe(2.4)
+  })
+
+  it("returns 2.4 for a cluster of 10 events (upper bound of 6–10 range)", () => {
+    expect(getClusterPinRadius(10)).toBe(2.4)
+  })
+
+  it("returns 3.0 for a cluster of 11 events (lower bound of 11+ range)", () => {
+    expect(getClusterPinRadius(11)).toBe(3.0)
+  })
+
+  it("returns 3.0 for a cluster of 100 events (clamps at max radius)", () => {
+    expect(getClusterPinRadius(100)).toBe(3.0)
   })
 })
 
