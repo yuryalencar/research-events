@@ -9,7 +9,10 @@ import de from "./de.json"
 // the "home" namespace covers the page-level loading state, and
 // "eventDetail" covers every label in the side panel / bottom card.
 const EXPECTED_HOME_KEYS = [
-  "loading",
+  "loadingStep1",
+  "loadingStep2",
+  "loadingStep3",
+  "loadingStep4",
   "noEvents",
   "noEventsFiltered",
   "cluster.drawerTitle",

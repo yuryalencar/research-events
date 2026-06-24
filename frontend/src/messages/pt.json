@@ -36,7 +36,10 @@
     "UNKNOWN": "Algo deu errado. Tente novamente."
   },
   "home": {
-    "loading": "Carregando eventos…",
+    "loadingStep1": "Carregando eventos…",
+    "loadingStep2": "Acordando nosso servidor…",
+    "loadingStep3": "O primeiro carregamento demora um pouco…",
+    "loadingStep4": "Quase lá, aguarde…",
     "noEvents": "Nenhum evento cadastrado ainda.",
     "noEventsFiltered": "Nenhum evento corresponde aos filtros atuais. Tente ajustar ou redefinir os filtros.",
     "cluster": {

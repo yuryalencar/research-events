@@ -36,7 +36,10 @@
     "UNKNOWN": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
   "home": {
-    "loading": "Veranstaltungen werden geladen…",
+    "loadingStep1": "Ereignisse werden geladen…",
+    "loadingStep2": "Server wird gestartet…",
+    "loadingStep3": "Erster Ladevorgang dauert einen Moment…",
+    "loadingStep4": "Fast fertig, kurz warten…",
     "noEvents": "Noch keine Veranstaltungen registriert.",
     "noEventsFiltered": "Keine Veranstaltungen entsprechen den aktuellen Filtern. Versuche, sie anzupassen oder zurückzusetzen.",
     "cluster": {

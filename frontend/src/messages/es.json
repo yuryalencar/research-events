@@ -36,7 +36,10 @@
     "UNKNOWN": "Algo salió mal. Inténtalo de nuevo."
   },
   "home": {
-    "loading": "Cargando eventos…",
+    "loadingStep1": "Cargando eventos…",
+    "loadingStep2": "Despertando nuestro servidor…",
+    "loadingStep3": "La primera carga tarda un momento…",
+    "loadingStep4": "Casi listo, un momento…",
     "noEvents": "Aún no hay eventos registrados.",
     "noEventsFiltered": "Ningún evento coincide con los filtros actuales. Intenta ajustarlos o restablecerlos.",
     "cluster": {

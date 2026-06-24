@@ -15,6 +15,7 @@ import { InfoButton } from "@/components/globe/InfoButton"
 import { ViewToggleButton } from "@/components/globe/ViewToggleButton"
 import { useEvents } from "@/hooks/useEvents"
 import { useFilters } from "@/hooks/useFilters"
+import { useLoadingMessage } from "@/hooks/useLoadingMessage"
 import { useGlobeClusters } from "@/hooks/useGlobeClusters"
 import { useSelectedEvent } from "@/hooks/useSelectedEvent"
 import { useViewMode } from "@/hooks/useViewMode"
@@ -34,6 +35,14 @@ export default function Page(): JSX.Element {
   const currentYear = new Date().getFullYear()
   const filters = useFilters(currentYear)
   const { events, isLoading } = useEvents(filters.activeFilters)
+
+  const loadingMessages = [
+    t("loadingStep1"),
+    t("loadingStep2"),
+    t("loadingStep3"),
+    t("loadingStep4"),
+  ]
+  const { message: loadingMessage } = useLoadingMessage(isLoading, { messages: loadingMessages })
 
   const { activeFilters } = filters
   const hasNonDefaultFilters =
@@ -130,7 +139,7 @@ export default function Page(): JSX.Element {
                 className="flex items-center gap-3 rounded-lg border border-border bg-background/80 px-6 py-4 text-foreground shadow-lg"
               >
                 <div aria-hidden="true" className="size-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
-                <span>{t("loading")}</span>
+                <span>{loadingMessage}</span>
               </div>
             </div>
           )}

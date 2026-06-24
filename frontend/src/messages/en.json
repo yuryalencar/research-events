@@ -36,7 +36,10 @@
     "UNKNOWN": "Something went wrong. Please try again."
   },
   "home": {
-    "loading": "Loading events…",
+    "loadingStep1": "Loading events…",
+    "loadingStep2": "Waking up our server…",
+    "loadingStep3": "First load takes a moment…",
+    "loadingStep4": "Almost there, hang tight…",
     "noEvents": "No events registered yet.",
     "noEventsFiltered": "No events match the current filters. Try adjusting or resetting them.",
     "cluster": {

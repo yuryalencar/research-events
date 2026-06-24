@@ -196,6 +196,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-22 | [Language Selector (Frontend)](ai-sessions/2026-06-22-language-selector-feature.md) | Fixed bottom-right flag button on every page — switches between 🇺🇸 English, 🇧🇷 Português, 🇪🇸 Español, 🇩🇪 Deutsch while preserving the current URL path. Created `src/i18n/navigation.ts` (missing `createNavigation` module for next-intl v4 locale-aware routing). |
 | 2026-06-22 | [Year Filter: "From Year" Semantics](ai-sessions/2026-06-22-year-filter-from-semantics.md) | `?year=2026` now returns year >= 2026; omitting year returns all events. Backend: `*int` nullable year + updated `firstDeadlineMonth` subquery. Frontend: `number \| undefined` year type, globe locks year (min = currentYear−2), submission page min = currentYear, "From year" label in all 4 locales. 278 tests. |
 | 2026-06-24 | [Globe Event Clustering (Frontend)](ai-sessions/2026-06-24-globe-event-clustering.md) | `supercluster` groups nearby pins into violet cluster pins (dynamic, zoom-aware); clicking opens a multi-event drawer immediately. New `useGlobeClusters` hook, `altitudeToZoom` pure function, `ClusterEventDrawer` (Dialog/Drawer responsive). InfoModal violet legend row. 4 new i18n keys across all locales. 299 tests. |
+| 2026-06-24 | [Globe Loading Message Progression (Frontend)](ai-sessions/2026-06-24-globe-loading-progression.md) | `useLoadingMessage` hook cycles through 4 messages while the backend cold-starts: "Loading events…" → "Waking up our server…" → "First load takes a moment…" → "Almost there, hang tight…". 2500ms initial delay, 1500ms between steps, resets on re-fetch. 307 tests. |
 
 ## Specs
 
@@ -233,6 +234,17 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Events: Year filter — "from year" semantics (Backend) | [events-list-year-from-semantics.yaml](specs/backend/events-list-year-from-semantics.yaml) | Done |
 | Year filter — "from year" semantics (Frontend) | [year-filter-from-semantics.md](specs/frontend/year-filter-from-semantics.md) | Done |
 | Globe Event Clustering (Frontend) | [globe-event-clustering.md](specs/frontend/globe-event-clustering.md) | Done |
+| Globe Loading Message Progression (Frontend) | [globe-loading-progression.md](specs/frontend/globe-loading-progression.md) | Done |
+
+---
+
+## Releases
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| [v0.1.0](https://github.com/yuryalencar/research-events/releases/tag/v0.1.0) | 2026-06-19 | Initial public release — Go API (auth, event submission, deadlines, admin review, OTel tracing), Globe homepage, 3D pins, event detail, submission wizard, management portal + dashboard, deadline management. |
+| [v0.1.1](https://github.com/yuryalencar/research-events/releases/tag/v0.1.1) | 2026-06-24 | Globe event clustering (`supercluster`), multi-event cluster drawer, year-from filter semantics, language selector, table view toggle, session guard, update password. |
+| [v0.1.2](https://github.com/yuryalencar/research-events/releases/tag/v0.1.2) | 2026-06-24 | Globe loading message progression — `useLoadingMessage` hook cycles through 4 messages while the backend cold-starts, improving perceived UX on first visit. |
 
 ---
 
