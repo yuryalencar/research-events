@@ -29,6 +29,7 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id uint) (model.User, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	Create(ctx context.Context, user model.User) (model.User, error)
+	List(ctx context.Context, filter ListUsersFilter) ([]model.User, int64, error)
 	UpdateRole(ctx context.Context, userID uint, newRole model.UserRole) error
 	UpdateTokens(ctx context.Context, userID uint, jti string, jtiExp time.Time, refreshHash string, refreshExp time.Time) error
 	ClearTokens(ctx context.Context, userID uint) error
@@ -41,6 +42,22 @@ type UserRepository interface {
 
 // --- Types ---
 
+// ListUsersFilter carries the validated filters for UserRepository.List.
+// Roles is an OR filter — empty means all roles.
+// Locked nil means no filter; true/false filters by locked_at IS [NOT] NULL.
+// IncludeDeleted true adds soft-deleted users to the result set.
+type ListUsersFilter struct {
+	Roles  []model.UserRole
+	Search string
+	Locked *bool
+
+	IncludeDeleted bool
+
+	Page          int
+	PageSize      int
+	PaginationOff bool
+}
+
 type userRepository struct {
 	db *gorm.DB
 }
@@ -52,6 +69,50 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 }
 
 // --- Public methods ---
+
+func (r *userRepository) List(ctx context.Context, filter ListUsersFilter) ([]model.User, int64, error) {
+	q := r.db.WithContext(ctx).Model(&model.User{})
+
+	if filter.IncludeDeleted {
+		q = q.Unscoped()
+	}
+
+	if len(filter.Roles) > 0 {
+		q = q.Where("role IN ?", filter.Roles)
+	}
+
+	if filter.Search != "" {
+		pattern := "%" + filter.Search + "%"
+		q = q.Where("name ILIKE ? OR email ILIKE ?", pattern, pattern)
+	}
+
+	if filter.Locked != nil {
+		if *filter.Locked {
+			q = q.Where("locked_at IS NOT NULL")
+		} else {
+			q = q.Where("locked_at IS NULL")
+		}
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q = q.Order("created_at DESC")
+
+	if !filter.PaginationOff {
+		offset := (filter.Page - 1) * filter.PageSize
+		q = q.Limit(filter.PageSize).Offset(offset)
+	}
+
+	var users []model.User
+	if err := q.Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
 
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var count int64

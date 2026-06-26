@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/yuryalencar/research-events/internal/middleware"
 	"github.com/yuryalencar/research-events/internal/model"
@@ -38,6 +40,32 @@ func NewAdminUserHandler(
 }
 
 // --- Public methods ---
+
+// List handles GET /api/v1/admin/users.
+// Admin only — returns a paginated, filtered list of users (no password or token fields).
+func (h *AdminUserHandler) List(w http.ResponseWriter, r *http.Request) {
+	raw := toRawListUsersQuery(r.URL.Query())
+
+	input, err := service.ValidateListUsersQuery(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	users, total, err := h.userRepo.List(r.Context(), service.ToListUsersFilter(input))
+	if err != nil {
+		h.logger.Error("failed to list users", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	data := make([]userListItemResponse, 0, len(users))
+	for _, u := range users {
+		data = append(data, toUserListItemResponse(u))
+	}
+
+	writeSuccessWithMeta(w, http.StatusOK, "USERS_LISTED", data, listMeta{Page: input.Page, Total: total})
+}
 
 // Register handles POST /api/v1/admin/users.
 // Admin only — registers a new admin or moderator with a hashed password.
@@ -258,4 +286,51 @@ func (h *AdminUserHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 			"role":  string(user.Role),
 		},
 	})
+}
+
+// --- Private functions ---
+
+// userListItemResponse is the per-user shape returned by GET /api/v1/admin/users.
+// Only safe fields are included — password_hash and all token fields are omitted.
+type userListItemResponse struct {
+	ID        uint       `json:"id"`
+	Name      string     `json:"name"`
+	Email     string     `json:"email"`
+	Role      string     `json:"role"`
+	CreatedAt time.Time  `json:"created_at"`
+	LockedAt  *time.Time `json:"locked_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
+
+// toRawListUsersQuery copies the relevant query string parameters into
+// service.RawListUsersQuery. No parsing or validation happens here — that is
+// ValidateListUsersQuery's job, so it stays testable without net/http.
+func toRawListUsersQuery(q url.Values) service.RawListUsersQuery {
+	return service.RawListUsersQuery{
+		Roles:          q.Get("roles"),
+		Search:         q.Get("search"),
+		Locked:         q.Get("locked"),
+		IncludeDeleted: q.Get("include_deleted"),
+		Page:           q.Get("page"),
+		PageSize:       q.Get("page_size"),
+		Pagination:     q.Get("pagination"),
+	}
+}
+
+// toUserListItemResponse maps a model.User to the safe response shape,
+// explicitly excluding password_hash and all token fields.
+func toUserListItemResponse(u model.User) userListItemResponse {
+	var deletedAt *time.Time
+	if u.DeletedAt.Valid {
+		deletedAt = &u.DeletedAt.Time
+	}
+	return userListItemResponse{
+		ID:        u.ID,
+		Name:      u.Name,
+		Email:     u.Email,
+		Role:      string(u.Role),
+		CreatedAt: u.CreatedAt,
+		LockedAt:  u.LockedAt,
+		DeletedAt: deletedAt,
+	}
 }

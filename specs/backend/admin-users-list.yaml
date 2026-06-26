@@ -1,0 +1,102 @@
+endpoint: GET /api/v1/admin/users
+
+description: >
+  Returns a paginated list of platform users. Supports filtering by role (cumulative OR),
+  name/email search, lock status, and optionally includes soft-deleted accounts.
+  Sorted by created_at DESC. Never returns password or token fields.
+
+request:
+  query_params:
+    roles: string (optional)
+      # Comma-separated list of roles to include: "admin", "moderator", "contributor".
+      # Acts as OR — e.g. ?roles=admin,moderator returns admins AND moderators.
+      # Omitting the param returns all roles.
+    search: string (optional)
+      # Case-insensitive partial match applied to name OR email.
+    locked: boolean (optional, "true" | "false")
+      # "true"  → only users with locked_at IS NOT NULL
+      # "false" → only users with locked_at IS NULL
+      # Omitted  → both locked and unlocked users included
+    include_deleted: boolean (optional, "true" | "false", default "false")
+      # "true" → include soft-deleted users in results
+    page: integer (optional, default 1, min 1)
+    page_size: integer (optional, default 20, min 1, max 100)
+    pagination: string (optional, enum: ["on", "off"], default "on")
+      # "off" returns all matching rows; page and page_size are ignored
+
+responses:
+  200:
+    description: List of users matching the given filters
+    body:
+      code: "USERS_LISTED"
+      data:
+        - id: number
+          name: string
+          email: string
+          role: string  # "admin" | "moderator" | "contributor"
+          created_at: string (ISO 8601)
+          locked_at: string | null   # ISO 8601, null when not locked
+          deleted_at: string | null  # ISO 8601, null when active; set when soft-deleted
+      meta:
+        page: number
+        total: number
+  400:
+    description: Invalid query parameter
+    body:
+      code: "VALIDATION_ERROR"
+      error:
+        message: string  # e.g. "roles contains unknown value: 'superuser'"
+  401:
+    description: No valid JWT present
+    body:
+      code: "UNAUTHORIZED"
+      error:
+        message: "authentication required"
+  403:
+    description: Authenticated user is not an admin
+    body:
+      code: "FORBIDDEN"
+      error:
+        message: "admin role required"
+
+rules:
+  - Result set is sorted by created_at DESC
+  - roles filter is cumulative OR — multiple values broaden, not narrow, the result
+  - search is case-insensitive and matches any substring in name or email
+  - Soft-deleted users are excluded by default; include_deleted=true overrides this
+  - locked filter checks locked_at IS [NOT] NULL
+  - page_size maximum is 100
+  - Response never includes password_hash, access_token_jti, refresh_token_hash, or any token expiry field
+  - deleted_at is null for active users; set to the soft-deletion timestamp for deleted users
+
+permissions:
+  - admin role only
+  - moderator → 403
+  - contributor → 403
+  - unauthenticated → 401
+
+border_cases:
+  - roles contains an unrecognised value (e.g. "superuser") → 400
+  - roles=admin,moderator,contributor → equivalent to no roles filter (all roles returned)
+  - search matches email but not name → user is returned
+  - search matches name but not email → user is returned
+  - page beyond total → 200 with empty data array + correct meta
+  - include_deleted=true AND locked=true → returns locked AND soft-deleted users that are locked
+  - pagination=off ignores page and page_size entirely
+  - All filters combined → AND semantics across different params, OR only within roles
+
+definition_of_done:
+  - 200 + paginated list with correct meta for valid admin request with no filters
+  - 200 + only admins when roles=admin
+  - 200 + admins and moderators when roles=admin,moderator (OR logic verified)
+  - 200 + matching users when search=<partial name or email>
+  - 200 + only locked users when locked=true
+  - 200 + includes soft-deleted users when include_deleted=true
+  - 200 + empty data array (not 404) when no users match
+  - 400 when roles contains an unknown value
+  - 400 when page is not a positive integer
+  - 400 when page_size exceeds 100
+  - 401 when no JWT present
+  - 403 when JWT belongs to a moderator role
+  - Response never includes password_hash or any token field
+  - Default sort order is created_at DESC (verified with two users inserted in reverse order)

@@ -3,6 +3,7 @@ package handler_test
 // Spec: specs/backend/admin-users-unlock.yaml
 // Spec: specs/backend/admin-users-register.yaml
 // Spec: specs/backend/admin-users-change-role.yaml
+// Spec: specs/backend/admin-users-list.yaml
 // Rule: "Only admins can unlock — admin cannot unlock themselves"
 // Rule: "Write AuditLog with entity_type=user, action=unlocked"
 
@@ -573,7 +574,244 @@ func TestAdminUserHandler_ChangeRole_WritesAuditLogWithRoleDiff(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
-func TestAdminUserHandler_ChangeRole_Returns200ForAllValidRoleTransitions(t *testing.T) {
+// --- List helpers ---
+
+func listUsersMux(h *handler.AdminUserHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/admin/users", h.List)
+	return mux
+}
+
+func listUsersReq(role, query string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users?"+query, nil)
+	return req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{
+		ID:   1,
+		Role: role,
+		Name: "Caller",
+	}))
+}
+
+// --- List tests (Cycle 9) ---
+
+func TestAdminUserHandler_List_Returns200WithDataAndMeta(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + paginated list with correct meta for valid admin request"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	users := []model.User{
+		{Model: gorm.Model{ID: 1}, Name: "Alice", Email: "alice@example.com", Role: model.UserRoleAdmin},
+		{Model: gorm.Model{ID: 2}, Name: "Bob", Email: "bob@example.com", Role: model.UserRoleModerator},
+	}
+	mockUserRepo.EXPECT().List(gomock.Any(), gomock.Any()).Return(users, int64(2), nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", ""))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+	assert.Equal(t, "USERS_LISTED", body["code"])
+	meta := body["meta"].(map[string]any)
+	assert.Equal(t, float64(2), meta["total"])
+	assert.Equal(t, float64(1), meta["page"])
+}
+
+func TestAdminUserHandler_List_EmptyResult_Returns200NotError(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + empty data array (not 404) when no users match"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().List(gomock.Any(), gomock.Any()).Return([]model.User{}, int64(0), nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "roles=admin"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+	assert.Equal(t, "USERS_LISTED", body["code"])
+	data := body["data"].([]any)
+	assert.Empty(t, data)
+}
+
+func TestAdminUserHandler_List_InvalidRole_Returns400(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "400 when roles contains an unknown value"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+	// No repo call expected — validation fails before any DB access.
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "roles=superuser"))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_List_InvalidPage_Returns400(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "400 when page is not a positive integer"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "page=0"))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_List_PageSizeExceedsMax_Returns400(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "400 when page_size exceeds 100"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "page_size=101"))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_List_NeverIncludesPasswordHash(t *testing.T) {
+	// Spec: admin-users-list.yaml rule "Response never includes password_hash or any token field"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	secret := "bcrypt-hash-secret"
+	users := []model.User{
+		{Model: gorm.Model{ID: 1}, Name: "Alice", Email: "alice@example.com", Role: model.UserRoleAdmin, PasswordHash: &secret},
+	}
+	mockUserRepo.EXPECT().List(gomock.Any(), gomock.Any()).Return(users, int64(1), nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", ""))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.NotContains(t, body, "password_hash", "password_hash must never appear in the response")
+	assert.NotContains(t, body, "bcrypt-hash-secret", "plaintext hash value must never appear in the response")
+	assert.NotContains(t, body, "access_token", "token fields must never appear in the response")
+	assert.NotContains(t, body, "refresh_token", "token fields must never appear in the response")
+}
+
+func TestAdminUserHandler_List_ResponseIncludesLockedAt(t *testing.T) {
+	// Spec: admin-users-list.yaml — locked_at field present in each user object (null when not locked)
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	lockedAt := time.Now()
+	users := []model.User{
+		{Model: gorm.Model{ID: 1}, Name: "Locked", Email: "locked@example.com", Role: model.UserRoleAdmin, LockedAt: &lockedAt},
+		{Model: gorm.Model{ID: 2}, Name: "Active", Email: "active@example.com", Role: model.UserRoleAdmin},
+	}
+	mockUserRepo.EXPECT().List(gomock.Any(), gomock.Any()).Return(users, int64(2), nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", ""))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+
+	data := body["data"].([]any)
+	require.Len(t, data, 2)
+
+	lockedUser := data[0].(map[string]any)
+	activeUser := data[1].(map[string]any)
+	assert.NotNil(t, lockedUser["locked_at"])
+	assert.Nil(t, activeUser["locked_at"])
+}
+
+func TestAdminUserHandler_List_PassesRoleFilterToRepository(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + only admins when roles=admin"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().
+		List(gomock.Any(), gomock.AssignableToTypeOf(repository.ListUsersFilter{})).
+		DoAndReturn(func(_ any, f repository.ListUsersFilter) ([]model.User, int64, error) {
+			assert.Equal(t, []model.UserRole{model.UserRoleAdmin}, f.Roles)
+			return []model.User{}, int64(0), nil
+		})
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "roles=admin"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAdminUserHandler_List_ResponseIncludesDeletedAt(t *testing.T) {
+	// Spec: admin-users-list.yaml — deleted_at is set for soft-deleted users, null for active ones
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	deletedTime := time.Now().Add(-24 * time.Hour)
+	users := []model.User{
+		{
+			Model: gorm.Model{ID: 1, DeletedAt: gorm.DeletedAt{Time: deletedTime, Valid: true}},
+			Name:  "Deleted User", Email: "deleted@example.com", Role: model.UserRoleAdmin,
+		},
+		{
+			Model: gorm.Model{ID: 2},
+			Name:  "Active User", Email: "active@example.com", Role: model.UserRoleAdmin,
+		},
+	}
+	mockUserRepo.EXPECT().List(gomock.Any(), gomock.Any()).Return(users, int64(2), nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "include_deleted=true"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+
+	data := body["data"].([]any)
+	require.Len(t, data, 2)
+
+	deletedUser := data[0].(map[string]any)
+	activeUser := data[1].(map[string]any)
+	assert.NotNil(t, deletedUser["deleted_at"], "deleted user must have deleted_at set")
+	assert.Nil(t, activeUser["deleted_at"], "active user must have deleted_at as null")
+}
+
+func TestAdminUserHandler_List_PassesSearchFilterToRepository(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + matching users when search=<partial name or email>"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().
+		List(gomock.Any(), gomock.AssignableToTypeOf(repository.ListUsersFilter{})).
+		DoAndReturn(func(_ any, f repository.ListUsersFilter) ([]model.User, int64, error) {
+			assert.Equal(t, "alice", f.Search)
+			return []model.User{}, int64(0), nil
+		})
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	listUsersMux(h).ServeHTTP(rec, listUsersReq("admin", "search=alice"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAdminUserHandler_List_Returns200ForAllValidRoleTransitions(t *testing.T) {
 	// Spec: admin-users-change-role.yaml border_cases — all 6 allowed transitions
 	transitions := []struct {
 		from model.UserRole

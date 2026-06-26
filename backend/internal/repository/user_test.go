@@ -7,6 +7,7 @@ package repository_test
 // Spec: specs/backend/users-update-password.yaml
 // Spec: specs/backend/admin-users-register.yaml
 // Spec: specs/backend/admin-users-change-role.yaml
+// Spec: specs/backend/admin-users-list.yaml
 
 import (
 	"context"
@@ -457,6 +458,316 @@ func TestUserRepository_UpdateRole_LeavesOtherFieldsUnchanged(t *testing.T) {
 	assert.Equal(t, "updaterole-carol@example.com", updated.Email)
 	require.NotNil(t, updated.PasswordHash)
 	assert.Equal(t, hash, *updated.PasswordHash)
+}
+
+// --- List ---
+
+func TestUserRepository_List_ReturnsAllUsers(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + paginated list with correct meta"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "Alpha", Email: "list-alpha@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "Beta", Email: "list-beta@example.com", Role: model.UserRoleModerator}).Error)
+
+	users, total, err := repo.List(context.Background(), repository.ListUsersFilter{Page: 1, PageSize: 20})
+
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, total, int64(2))
+	assert.GreaterOrEqual(t, len(users), 2)
+}
+
+func TestUserRepository_List_FiltersByRole(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + only admins when roles=admin"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "AdminUser", Email: "list-role-admin@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "ModUser", Email: "list-role-mod@example.com", Role: model.UserRoleModerator}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Roles:    []model.UserRole{model.UserRoleAdmin},
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	for _, u := range users {
+		assert.Equal(t, model.UserRoleAdmin, u.Role)
+	}
+}
+
+func TestUserRepository_List_FiltersByMultipleRoles(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + admins and moderators when roles=admin,moderator (OR logic)"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "A2", Email: "list-multi-admin@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "M2", Email: "list-multi-mod@example.com", Role: model.UserRoleModerator}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "C2", Email: "list-multi-cont@example.com", Role: model.UserRoleContributor}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Roles:    []model.UserRole{model.UserRoleAdmin, model.UserRoleModerator},
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	for _, u := range users {
+		assert.NotEqual(t, model.UserRoleContributor, u.Role, "contributor must not appear in admin+moderator filter")
+	}
+	emails := make([]string, len(users))
+	for i, u := range users {
+		emails[i] = u.Email
+	}
+	assert.Contains(t, emails, "list-multi-admin@example.com")
+	assert.Contains(t, emails, "list-multi-mod@example.com")
+}
+
+func TestUserRepository_List_FiltersBySearchMatchesName(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + matching users when search=<partial name>"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "Zephyr Unique", Email: "list-search-name@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "Other Person", Email: "list-search-other@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "Zephyr",
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	assert.Equal(t, "list-search-name@example.com", users[0].Email)
+}
+
+func TestUserRepository_List_FiltersBySearchMatchesEmail(t *testing.T) {
+	// Spec: admin-users-list.yaml border_case "search matches email but not name → user is returned"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "Regular Name", Email: "uniquetoken99@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "uniquetoken99",
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	assert.Equal(t, "uniquetoken99@example.com", users[0].Email)
+}
+
+func TestUserRepository_List_FiltersByLockedTrue(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + only locked users when locked=true"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	now := time.Now()
+	require.NoError(t, tx.Create(&model.User{Name: "Locked", Email: "list-locked@example.com", Role: model.UserRoleAdmin, LockedAt: &now}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "Active", Email: "list-active@example.com", Role: model.UserRoleAdmin}).Error)
+
+	lockedTrue := true
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Locked:   &lockedTrue,
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	for _, u := range users {
+		assert.NotNil(t, u.LockedAt, "all returned users must be locked")
+	}
+	emails := make([]string, len(users))
+	for i, u := range users {
+		emails[i] = u.Email
+	}
+	assert.Contains(t, emails, "list-locked@example.com")
+	assert.NotContains(t, emails, "list-active@example.com")
+}
+
+func TestUserRepository_List_FiltersByLockedFalse(t *testing.T) {
+	// Spec: admin-users-list.yaml — locked=false returns only unlocked users
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	now := time.Now()
+	require.NoError(t, tx.Create(&model.User{Name: "LockedB", Email: "list-lockedb@example.com", Role: model.UserRoleAdmin, LockedAt: &now}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "ActiveB", Email: "list-activeb@example.com", Role: model.UserRoleAdmin}).Error)
+
+	lockedFalse := false
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Locked:   &lockedFalse,
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	for _, u := range users {
+		assert.Nil(t, u.LockedAt, "all returned users must be unlocked")
+	}
+}
+
+func TestUserRepository_List_ExcludesSoftDeletedByDefault(t *testing.T) {
+	// Spec: admin-users-list.yaml rule "Soft-deleted users are excluded by default"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	u := model.User{Name: "ToDelete", Email: "list-softdel@example.com", Role: model.UserRoleAdmin}
+	require.NoError(t, tx.Create(&u).Error)
+	require.NoError(t, tx.Delete(&u).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{Page: 1, PageSize: 20})
+
+	require.NoError(t, err)
+	for _, got := range users {
+		assert.NotEqual(t, "list-softdel@example.com", got.Email)
+	}
+}
+
+func TestUserRepository_List_IncludesSoftDeletedWhenFlagSet(t *testing.T) {
+	// Spec: admin-users-list.yaml DoD "200 + includes soft-deleted users when include_deleted=true"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	u := model.User{Name: "Deleted2", Email: "list-softdel2@example.com", Role: model.UserRoleAdmin}
+	require.NoError(t, tx.Create(&u).Error)
+	require.NoError(t, tx.Delete(&u).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		IncludeDeleted: true,
+		Page:           1,
+		PageSize:       20,
+	})
+
+	require.NoError(t, err)
+	emails := make([]string, len(users))
+	for i, u := range users {
+		emails[i] = u.Email
+	}
+	assert.Contains(t, emails, "list-softdel2@example.com")
+}
+
+func TestUserRepository_List_SortedByCreatedAtDesc(t *testing.T) {
+	// Spec: admin-users-list.yaml rule "Result set is sorted by created_at DESC"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "First", Email: "list-sort-first@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "Second", Email: "list-sort-second@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "list-sort-",
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, users, 2)
+	assert.True(t, users[0].CreatedAt.After(users[1].CreatedAt) || users[0].CreatedAt.Equal(users[1].CreatedAt),
+		"first result must be newer or equal — sorted by created_at DESC")
+}
+
+func TestUserRepository_List_Paginated(t *testing.T) {
+	// Spec: admin-users-list.yaml — page beyond total returns empty data with correct meta
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "Page1", Email: "list-page-a@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "Page2", Email: "list-page-b@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, total, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "list-page-",
+		Page:     1,
+		PageSize: 1,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Len(t, users, 1)
+}
+
+func TestUserRepository_List_PageBeyondTotal_ReturnsEmptySlice(t *testing.T) {
+	// Spec: admin-users-list.yaml border_case "page beyond total → 200 with empty data array + correct meta"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "Only", Email: "list-beyond@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, total, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "list-beyond",
+		Page:     999,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Empty(t, users)
+}
+
+func TestUserRepository_List_PaginationOff_ReturnsAll(t *testing.T) {
+	// Spec: admin-users-list.yaml — pagination=off ignores page and page_size
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	require.NoError(t, tx.Create(&model.User{Name: "PA", Email: "list-poff-a@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "PB", Email: "list-poff-b@example.com", Role: model.UserRoleAdmin}).Error)
+	require.NoError(t, tx.Create(&model.User{Name: "PC", Email: "list-poff-c@example.com", Role: model.UserRoleAdmin}).Error)
+
+	users, total, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:        "list-poff-",
+		PaginationOff: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+	assert.Len(t, users, 3)
+}
+
+func TestUserRepository_List_NeverReturnsPasswordHash(t *testing.T) {
+	// Spec: admin-users-list.yaml rule "Response never includes password_hash"
+	// At the repository level: PasswordHash is loaded by GORM, but the handler
+	// must never serialise it. This test documents that the repo does NOT
+	// redact it — the handler layer is responsible for omission.
+	// We assert the hash IS present in the model so the handler test can prove it strips it.
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "secret-hash"
+	require.NoError(t, tx.Create(&model.User{
+		Name:         "Secure",
+		Email:        "list-secure@example.com",
+		Role:         model.UserRoleAdmin,
+		PasswordHash: &hash,
+	}).Error)
+
+	users, _, err := repo.List(context.Background(), repository.ListUsersFilter{
+		Search:   "list-secure",
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	// The model carries the hash — handler must NOT expose it in the JSON response.
+	assert.NotNil(t, users[0].PasswordHash)
 }
 
 func TestUserRepository_UpdatePassword_NewHashVerifiableWithBcrypt(t *testing.T) {

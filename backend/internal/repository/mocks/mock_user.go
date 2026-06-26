@@ -15,6 +15,7 @@ import (
 	time "time"
 
 	model "github.com/yuryalencar/research-events/internal/model"
+	repository "github.com/yuryalencar/research-events/internal/repository"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -128,6 +129,22 @@ func (m *MockUserRepository) IncrementFailedAttempts(ctx context.Context, userID
 func (mr *MockUserRepositoryMockRecorder) IncrementFailedAttempts(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementFailedAttempts", reflect.TypeOf((*MockUserRepository)(nil).IncrementFailedAttempts), ctx, userID)
+}
+
+// List mocks base method.
+func (m *MockUserRepository) List(ctx context.Context, filter repository.ListUsersFilter) ([]model.User, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, filter)
+	ret0, _ := ret[0].([]model.User)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// List indicates an expected call of List.
+func (mr *MockUserRepositoryMockRecorder) List(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockUserRepository)(nil).List), ctx, filter)
 }
 
 // LockAccount mocks base method.
