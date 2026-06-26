@@ -1,4 +1,4 @@
-const APP_VERSION = "0.1.0"
+const APP_VERSION = "0.1.3"
 const GITHUB_REPO_URL = "https://github.com/yuryalencar/research-events"
 const GITHUB_PROFILE_URL = "https://github.com/yuryalencar"
 const ADMIN_EMAIL = "yuryalencar19@gmail.com"
