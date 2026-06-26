@@ -33,7 +33,12 @@
     "RATE_LIMIT_EXCEEDED": "Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut.",
     "INTERNAL_ERROR": "Auf unserer Seite ist etwas schiefgelaufen. Bitte versuche es später erneut.",
     "NETWORK_ERROR": "Verbindung zum Server fehlgeschlagen. Überprüfe deine Verbindung und versuche es erneut.",
-    "UNKNOWN": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+    "UNKNOWN": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "EMAIL_ALREADY_EXISTS": "Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.",
+    "CANNOT_CHANGE_OWN_PASSWORD": "Verwende deine eigenen Profileinstellungen, um dein Passwort zu ändern.",
+    "PASSWORD_TOO_WEAK": "Das Passwort muss mindestens 8 Zeichen mit Groß-, Kleinbuchstaben und einem Sonderzeichen haben.",
+    "ROLE_UNCHANGED": "Der Benutzer hat bereits diese Rolle.",
+    "CANNOT_CHANGE_OWN_ROLE": "Du kannst deine eigene Rolle nicht ändern."
   },
   "home": {
     "loadingStep1": "Ereignisse werden geladen…",
@@ -303,7 +308,8 @@
       "nextButton": "Weiter →",
       "loading": "Ereignisse werden geladen…",
       "empty": "Keine Ereignisse entsprechen den aktuellen Filtern.",
-      "errorLoad": "Ereignisse konnten nicht geladen werden. Erneut versuchen."
+      "errorLoad": "Ereignisse konnten nicht geladen werden. Erneut versuchen.",
+      "manageUsersLink": "Benutzer verwalten"
     },
     "review": {
       "stepIndicator": "Schritt {current} von {total}",
@@ -374,6 +380,81 @@
         "conferenceLink": "Konferenz-Website",
         "backButton": "← Zurück zur Prüfung",
         "doneButton": "Fertig →"
+      }
+    },
+    "users": {
+      "pageTitle": "Benutzer",
+      "backToEvents": "← Zurück zu Ereignissen",
+      "registerButton": "Benutzer registrieren",
+      "filters": {
+        "searchPlaceholder": "Nach Name oder E-Mail suchen",
+        "rolesLabel": "Rollen",
+        "statusLabel": "Status",
+        "lockedBadge": "Gesperrt",
+        "deletedBadge": "Gelöscht",
+        "apply": "Anwenden",
+        "reset": "Zurücksetzen"
+      },
+      "list": {
+        "loading": "Benutzer werden geladen…",
+        "error": "Fehler beim Laden der Benutzer. Bitte erneut versuchen.",
+        "empty": "Kein Benutzer entspricht den aktuellen Filtern.",
+        "pageLabel": "Seite {page} von {totalPages} ({total} Benutzer)",
+        "prevButton": "← Zurück",
+        "nextButton": "Weiter →"
+      },
+      "card": {
+        "lockedBadge": "Gesperrt",
+        "deletedBadge": "Gelöscht",
+        "expand": "Benutzer erweitern",
+        "collapse": "Benutzer einklappen",
+        "deletedBanner": "Dieses Benutzerkonto wurde gelöscht.",
+        "roleSection": "Rolle ändern",
+        "roleLabel": "Rolle",
+        "applyRole": "Rolle anwenden",
+        "roleSuccess": "Rolle zu {role} aktualisiert",
+        "roleConfirmTitle": "Rolle ändern",
+        "roleConfirmBody": "Rolle von {from} zu {to} ändern?",
+        "passwordSection": "Passwort zurücksetzen",
+        "newPasswordLabel": "Neues Passwort",
+        "confirmPasswordLabel": "Passwort bestätigen",
+        "passwordMismatch": "Passwörter stimmen nicht überein",
+        "applyPassword": "Passwort anwenden",
+        "passwordSuccess": "Passwort aktualisiert",
+        "passwordConfirmTitle": "Passwort zurücksetzen",
+        "passwordConfirmBody": "Das Passwort wird für {name} aktualisiert.",
+        "unlockSection": "Konto entsperren",
+        "unlockDescription": "Dieses Konto ist derzeit gesperrt.",
+        "unlockButton": "Benutzer entsperren",
+        "unlockSuccess": "Konto entsperrt",
+        "confirmCancel": "Abbrechen",
+        "confirmConfirm": "Bestätigen"
+      },
+      "register": {
+        "pageTitle": "Benutzer registrieren",
+        "backToUsers": "← Zurück zu Benutzern",
+        "nameLabel": "Name",
+        "emailLabel": "E-Mail",
+        "roleLabel": "Rolle",
+        "rolePlaceholder": "Rolle auswählen",
+        "passwordLabel": "Passwort",
+        "confirmLabel": "Passwort bestätigen",
+        "passwordMismatch": "Passwörter stimmen nicht überein",
+        "submitButton": "Benutzer registrieren",
+        "confirmTitle": "Registrierung bestätigen",
+        "confirmBody": "{role}-Konto für {email} erstellen?",
+        "confirmCancel": "Abbrechen",
+        "confirmCreate": "Erstellen",
+        "errorBanner": "Registrierung fehlgeschlagen. Bitte erneut versuchen.",
+        "success": {
+          "title": "Benutzer registriert",
+          "subtitle": "{name} wurde als {role} hinzugefügt.",
+          "nameLabel": "Name",
+          "emailLabel": "E-Mail",
+          "roleLabel": "Rolle",
+          "registerAnother": "Weiteren Benutzer registrieren",
+          "backToUsers": "Zurück zur Benutzerliste"
+        }
       }
     }
   },

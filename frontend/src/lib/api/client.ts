@@ -113,6 +113,36 @@ async function apiRequestWithMeta<T>(path: string, init?: RequestInit): Promise<
   return { data: envelope.data, meta: envelope.meta }
 }
 
+// apiPrivateRequestWithMeta is the authenticated counterpart to apiRequestWithMeta —
+// for list endpoints that require a JWT cookie and also return pagination meta.
+// Inherits the same TOKEN_EXPIRED → refresh → retry logic as apiPrivateRequest.
+async function apiPrivateRequestWithMeta<T>(path: string, init?: RequestInit): Promise<{ data: T; meta: ApiMeta }> {
+  const privateInit: RequestInit = { ...init, credentials: "include" }
+
+  const fetchOnce = async (): Promise<{ data: T; meta: ApiMeta }> => {
+    const envelope = await sendRequest<T>(path, privateInit)
+    if (!envelope.meta) {
+      throw new ApiError("INTERNAL_ERROR", 0, "expected a list response with pagination meta")
+    }
+    return { data: envelope.data, meta: envelope.meta }
+  }
+
+  try {
+    return await fetchOnce()
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.code !== "TOKEN_EXPIRED") {
+      throw err
+    }
+
+    const refreshed = await refreshAccessToken()
+    if (!refreshed) {
+      throw err
+    }
+
+    return fetchOnce()
+  }
+}
+
 // apiPrivateRequest performs an authenticated request, sending the
 // HTTP-only access_token/refresh_token cookies via credentials: "include".
 //
@@ -146,5 +176,5 @@ async function apiPrivateRequest<T>(path: string, init?: RequestInit): Promise<T
 
 // --- Export ---
 
-export { apiRequest, apiRequestWithMeta, apiPrivateRequest, ApiError }
+export { apiRequest, apiRequestWithMeta, apiPrivateRequest, apiPrivateRequestWithMeta, ApiError }
 export type { ApiSuccessEnvelope, ApiErrorEnvelope }

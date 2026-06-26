@@ -33,7 +33,12 @@
     "RATE_LIMIT_EXCEEDED": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
     "INTERNAL_ERROR": "Algo salió mal de nuestro lado. Inténtalo de nuevo más tarde.",
     "NETWORK_ERROR": "No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.",
-    "UNKNOWN": "Algo salió mal. Inténtalo de nuevo."
+    "UNKNOWN": "Algo salió mal. Inténtalo de nuevo.",
+    "EMAIL_ALREADY_EXISTS": "Ya existe un usuario con este correo electrónico.",
+    "CANNOT_CHANGE_OWN_PASSWORD": "Usa la configuración de tu perfil para cambiar tu contraseña.",
+    "PASSWORD_TOO_WEAK": "La contraseña debe tener al menos 8 caracteres con mayúscula, minúscula y un carácter especial.",
+    "ROLE_UNCHANGED": "El usuario ya tiene este rol.",
+    "CANNOT_CHANGE_OWN_ROLE": "No puedes cambiar tu propio rol."
   },
   "home": {
     "loadingStep1": "Cargando eventos…",
@@ -303,7 +308,8 @@
       "nextButton": "Siguiente →",
       "loading": "Cargando eventos…",
       "empty": "Ningún evento coincide con los filtros actuales.",
-      "errorLoad": "Error al cargar eventos. Inténtalo de nuevo."
+      "errorLoad": "Error al cargar eventos. Inténtalo de nuevo.",
+      "manageUsersLink": "Gestionar Usuarios"
     },
     "review": {
       "stepIndicator": "Paso {current} de {total}",
@@ -374,6 +380,81 @@
         "conferenceLink": "Sitio web de la conferencia",
         "backButton": "← Volver a la Revisión",
         "doneButton": "Listo →"
+      }
+    },
+    "users": {
+      "pageTitle": "Usuarios",
+      "backToEvents": "← Volver a Eventos",
+      "registerButton": "Registrar Usuario",
+      "filters": {
+        "searchPlaceholder": "Buscar por nombre o correo",
+        "rolesLabel": "Roles",
+        "statusLabel": "Estado",
+        "lockedBadge": "Bloqueado",
+        "deletedBadge": "Eliminado",
+        "apply": "Aplicar",
+        "reset": "Restablecer"
+      },
+      "list": {
+        "loading": "Cargando usuarios…",
+        "error": "Error al cargar usuarios. Inténtalo de nuevo.",
+        "empty": "Ningún usuario coincide con los filtros actuales.",
+        "pageLabel": "Página {page} de {totalPages} ({total} usuarios)",
+        "prevButton": "← Anterior",
+        "nextButton": "Siguiente →"
+      },
+      "card": {
+        "lockedBadge": "Bloqueado",
+        "deletedBadge": "Eliminado",
+        "expand": "Expandir usuario",
+        "collapse": "Contraer usuario",
+        "deletedBanner": "Esta cuenta de usuario ha sido eliminada.",
+        "roleSection": "Cambiar Rol",
+        "roleLabel": "Rol",
+        "applyRole": "Aplicar Rol",
+        "roleSuccess": "Rol actualizado a {role}",
+        "roleConfirmTitle": "Cambiar rol",
+        "roleConfirmBody": "¿Cambiar rol de {from} a {to}?",
+        "passwordSection": "Restablecer Contraseña",
+        "newPasswordLabel": "Nueva contraseña",
+        "confirmPasswordLabel": "Confirmar contraseña",
+        "passwordMismatch": "Las contraseñas no coinciden",
+        "applyPassword": "Aplicar Contraseña",
+        "passwordSuccess": "Contraseña actualizada",
+        "passwordConfirmTitle": "Restablecer contraseña",
+        "passwordConfirmBody": "La contraseña se actualizará para {name}.",
+        "unlockSection": "Desbloquear Cuenta",
+        "unlockDescription": "Esta cuenta está actualmente bloqueada.",
+        "unlockButton": "Desbloquear Usuario",
+        "unlockSuccess": "Cuenta desbloqueada",
+        "confirmCancel": "Cancelar",
+        "confirmConfirm": "Confirmar"
+      },
+      "register": {
+        "pageTitle": "Registrar Usuario",
+        "backToUsers": "← Volver a Usuarios",
+        "nameLabel": "Nombre",
+        "emailLabel": "Correo electrónico",
+        "roleLabel": "Rol",
+        "rolePlaceholder": "Seleccionar rol",
+        "passwordLabel": "Contraseña",
+        "confirmLabel": "Confirmar contraseña",
+        "passwordMismatch": "Las contraseñas no coinciden",
+        "submitButton": "Registrar Usuario",
+        "confirmTitle": "Confirmar registro",
+        "confirmBody": "¿Crear cuenta {role} para {email}?",
+        "confirmCancel": "Cancelar",
+        "confirmCreate": "Crear",
+        "errorBanner": "Error en el registro. Inténtalo de nuevo.",
+        "success": {
+          "title": "Usuario registrado",
+          "subtitle": "{name} ha sido añadido como {role}.",
+          "nameLabel": "Nombre",
+          "emailLabel": "Correo electrónico",
+          "roleLabel": "Rol",
+          "registerAnother": "Registrar otro usuario",
+          "backToUsers": "Volver a la lista de usuarios"
+        }
       }
     }
   },

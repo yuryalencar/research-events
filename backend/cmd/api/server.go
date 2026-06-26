@@ -156,6 +156,16 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 		),
 	)
 
+	mux.Handle("PATCH /api/v1/admin/users/{id}/password",
+		rateLimiter.Limit(
+			authMiddleware.RequireAuth(
+				middleware.RequireRole("admin")(
+					http.HandlerFunc(adminUserHandler.ResetPassword),
+				),
+			),
+		),
+	)
+
 	// Admin/moderator endpoint — RequireAuth then RequireRole("admin", "moderator").
 	mux.Handle("PATCH /api/v1/admin/events/{id}/review",
 		authMiddleware.RequireAuth(

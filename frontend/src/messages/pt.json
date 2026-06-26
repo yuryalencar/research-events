@@ -33,7 +33,12 @@
     "RATE_LIMIT_EXCEEDED": "Muitas solicitações. Aguarde um momento e tente novamente.",
     "INTERNAL_ERROR": "Algo deu errado do nosso lado. Tente novamente mais tarde.",
     "NETWORK_ERROR": "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.",
-    "UNKNOWN": "Algo deu errado. Tente novamente."
+    "UNKNOWN": "Algo deu errado. Tente novamente.",
+    "EMAIL_ALREADY_EXISTS": "Já existe um usuário com este e-mail.",
+    "CANNOT_CHANGE_OWN_PASSWORD": "Use as configurações do seu perfil para alterar sua senha.",
+    "PASSWORD_TOO_WEAK": "A senha deve ter pelo menos 8 caracteres com maiúscula, minúscula e um caractere especial.",
+    "ROLE_UNCHANGED": "O usuário já possui essa função.",
+    "CANNOT_CHANGE_OWN_ROLE": "Você não pode alterar sua própria função."
   },
   "home": {
     "loadingStep1": "Carregando eventos…",
@@ -303,7 +308,8 @@
       "nextButton": "Próxima →",
       "loading": "Carregando eventos…",
       "empty": "Nenhum evento corresponde aos filtros atuais.",
-      "errorLoad": "Falha ao carregar eventos. Tente novamente."
+      "errorLoad": "Falha ao carregar eventos. Tente novamente.",
+      "manageUsersLink": "Gerenciar Usuários"
     },
     "review": {
       "stepIndicator": "Passo {current} de {total}",
@@ -374,6 +380,81 @@
         "conferenceLink": "Site da conferência",
         "backButton": "← Voltar para Revisão",
         "doneButton": "Concluído →"
+      }
+    },
+    "users": {
+      "pageTitle": "Usuários",
+      "backToEvents": "← Voltar para Eventos",
+      "registerButton": "Cadastrar Usuário",
+      "filters": {
+        "searchPlaceholder": "Buscar por nome ou e-mail",
+        "rolesLabel": "Funções",
+        "statusLabel": "Status",
+        "lockedBadge": "Bloqueado",
+        "deletedBadge": "Excluído",
+        "apply": "Aplicar",
+        "reset": "Redefinir"
+      },
+      "list": {
+        "loading": "Carregando usuários…",
+        "error": "Falha ao carregar usuários. Tente novamente.",
+        "empty": "Nenhum usuário corresponde aos filtros atuais.",
+        "pageLabel": "Página {page} de {totalPages} ({total} usuários)",
+        "prevButton": "← Anterior",
+        "nextButton": "Próximo →"
+      },
+      "card": {
+        "lockedBadge": "Bloqueado",
+        "deletedBadge": "Excluído",
+        "expand": "Expandir usuário",
+        "collapse": "Recolher usuário",
+        "deletedBanner": "Esta conta de usuário foi excluída.",
+        "roleSection": "Alterar Função",
+        "roleLabel": "Função",
+        "applyRole": "Aplicar Função",
+        "roleSuccess": "Função atualizada para {role}",
+        "roleConfirmTitle": "Alterar função",
+        "roleConfirmBody": "Alterar função de {from} para {to}?",
+        "passwordSection": "Redefinir Senha",
+        "newPasswordLabel": "Nova senha",
+        "confirmPasswordLabel": "Confirmar senha",
+        "passwordMismatch": "As senhas não coincidem",
+        "applyPassword": "Aplicar Senha",
+        "passwordSuccess": "Senha atualizada",
+        "passwordConfirmTitle": "Redefinir senha",
+        "passwordConfirmBody": "A senha será atualizada para {name}.",
+        "unlockSection": "Desbloquear Conta",
+        "unlockDescription": "Esta conta está atualmente bloqueada.",
+        "unlockButton": "Desbloquear Usuário",
+        "unlockSuccess": "Conta desbloqueada",
+        "confirmCancel": "Cancelar",
+        "confirmConfirm": "Confirmar"
+      },
+      "register": {
+        "pageTitle": "Cadastrar Usuário",
+        "backToUsers": "← Voltar para Usuários",
+        "nameLabel": "Nome",
+        "emailLabel": "E-mail",
+        "roleLabel": "Função",
+        "rolePlaceholder": "Selecionar função",
+        "passwordLabel": "Senha",
+        "confirmLabel": "Confirmar senha",
+        "passwordMismatch": "As senhas não coincidem",
+        "submitButton": "Cadastrar Usuário",
+        "confirmTitle": "Confirmar cadastro",
+        "confirmBody": "Criar conta {role} para {email}?",
+        "confirmCancel": "Cancelar",
+        "confirmCreate": "Criar",
+        "errorBanner": "Falha no cadastro. Tente novamente.",
+        "success": {
+          "title": "Usuário cadastrado",
+          "subtitle": "{name} foi adicionado como {role}.",
+          "nameLabel": "Nome",
+          "emailLabel": "E-mail",
+          "roleLabel": "Função",
+          "registerAnother": "Cadastrar outro usuário",
+          "backToUsers": "Voltar para a lista de usuários"
+        }
       }
     }
   },

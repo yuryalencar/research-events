@@ -4,6 +4,7 @@ package handler_test
 // Spec: specs/backend/admin-users-register.yaml
 // Spec: specs/backend/admin-users-change-role.yaml
 // Spec: specs/backend/admin-users-list.yaml
+// Spec: specs/backend/admin-users-reset-password.yaml
 // Rule: "Only admins can unlock — admin cannot unlock themselves"
 // Rule: "Write AuditLog with entity_type=user, action=unlocked"
 
@@ -789,6 +790,194 @@ func TestAdminUserHandler_List_ResponseIncludesDeletedAt(t *testing.T) {
 	activeUser := data[1].(map[string]any)
 	assert.NotNil(t, deletedUser["deleted_at"], "deleted user must have deleted_at set")
 	assert.Nil(t, activeUser["deleted_at"], "active user must have deleted_at as null")
+}
+
+// --- ResetPassword helpers ---
+
+func resetPasswordMux(h *handler.AdminUserHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}/password", h.ResetPassword)
+	return mux
+}
+
+func resetPasswordReq(adminID uint, targetID any, body map[string]any) *http.Request {
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		fmt.Sprintf("/api/v1/admin/users/%v/password", targetID),
+		bytes.NewReader(b),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	return req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{
+		ID:   adminID,
+		Role: "admin",
+		Name: "Admin",
+	}))
+}
+
+func validResetPasswordBody() map[string]any {
+	return map[string]any{
+		"new_password":              "NewPass@1",
+		"new_password_confirmation": "NewPass@1",
+	}
+}
+
+// --- ResetPassword tests (Cycle 10) ---
+
+func TestAdminUserHandler_ResetPassword_Success_Returns200(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml DoD "200 + password updated + target user tokens cleared"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	targetID := uint(2)
+	target := model.User{Model: gorm.Model{ID: targetID}, Name: "Bob", Email: "bob@example.com", Role: model.UserRoleModerator}
+
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), targetID).Return(target, nil)
+	mockUserRepo.EXPECT().UpdatePassword(gomock.Any(), targetID, gomock.Any()).Return(nil)
+	mockUserRepo.EXPECT().ClearTokens(gomock.Any(), targetID).Return(nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(adminID, targetID, validResetPasswordBody()))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "USER_PASSWORD_CHANGED", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_InvalidID_Returns400(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml border_case ":id is not a valid integer → 400"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, "abc", validResetPasswordBody()))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_SelfChange_Returns422(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — admin targets own ID → 422 CANNOT_CHANGE_OWN_PASSWORD
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(adminID, adminID, validResetPasswordBody()))
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, "CANNOT_CHANGE_OWN_PASSWORD", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_InvalidJSON_Returns400(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — malformed body → 400 VALIDATION_ERROR
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/2/password", bytes.NewBufferString("{bad json"))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{ID: 1, Role: "admin", Name: "Admin"}))
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_PasswordsMismatch_Returns400(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml border_case "passwords don't match → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := map[string]any{
+		"new_password":              "NewPass@1",
+		"new_password_confirmation": "Different@2",
+	}
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, 2, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_WeakPassword_Returns422(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — password below complexity → 422 PASSWORD_TOO_WEAK
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := map[string]any{
+		"new_password":              "weak",
+		"new_password_confirmation": "weak",
+	}
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, 2, body))
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, "PASSWORD_TOO_WEAK", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_UserNotFound_Returns404(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — 404 for missing or soft-deleted user
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(99)).Return(model.User{}, repository.ErrNotFound)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, 99, validResetPasswordBody()))
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "USER_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_FindByIDError_Returns500(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — unexpected DB error on FindByID → 500
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(model.User{}, fmt.Errorf("db error"))
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, 2, validResetPasswordBody()))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, "INTERNAL_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ResetPassword_UpdatePasswordError_Returns500(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — unexpected DB error on UpdatePassword → 500
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	target := model.User{Model: gorm.Model{ID: 2}, Name: "Bob", Role: model.UserRoleModerator}
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(target, nil)
+	mockUserRepo.EXPECT().UpdatePassword(gomock.Any(), uint(2), gomock.Any()).Return(fmt.Errorf("db error"))
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	resetPasswordMux(h).ServeHTTP(rec, resetPasswordReq(1, 2, validResetPasswordBody()))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, "INTERNAL_ERROR", responseCode(t, rec))
 }
 
 func TestAdminUserHandler_List_PassesSearchFilterToRepository(t *testing.T) {

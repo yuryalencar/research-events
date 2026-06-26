@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 
-import { apiRequest, apiRequestWithMeta, apiPrivateRequest, ApiError } from "./client"
+import { apiRequest, apiRequestWithMeta, apiPrivateRequest, apiPrivateRequestWithMeta, ApiError } from "./client"
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -119,6 +119,38 @@ describe("apiRequestWithMeta", () => {
     const result = await apiRequestWithMeta<{ id: number }[]>("/api/v1/events")
 
     expect(result).toEqual({ data: [{ id: 1 }], meta: { page: 1, total: 1 } })
+  })
+})
+
+describe("apiPrivateRequestWithMeta", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("returns data and meta from an authenticated list response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse(200, { code: "OK", data: [{ id: 1 }], meta: { page: 1, total: 5 } }),
+    )
+
+    const result = await apiPrivateRequestWithMeta<{ id: number }[]>("/api/v1/admin/users")
+
+    expect(result).toEqual({ data: [{ id: 1 }], meta: { page: 1, total: 5 } })
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    expect(init?.credentials).toBe("include")
+  })
+
+  it("throws ApiError when the response has no meta field", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse(200, { code: "OK", data: [{ id: 1 }] }),
+    )
+
+    await expect(
+      apiPrivateRequestWithMeta<{ id: number }[]>("/api/v1/admin/users"),
+    ).rejects.toMatchObject({ code: "INTERNAL_ERROR" })
   })
 })
 

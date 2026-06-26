@@ -220,6 +220,100 @@ func (h *AdminUserHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ResetPassword handles PATCH /api/v1/admin/users/{id}/password.
+// Admin only — resets a user's password and invalidates their active session.
+// No current password required; admin authentication is the gate.
+func (h *AdminUserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse target user ID.
+	rawID := r.PathValue("id")
+	targetID64, err := strconv.ParseUint(rawID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", ":id must be a valid integer")
+		return
+	}
+	targetID := uint(targetID64)
+
+	// 2. Self-change guard — checked before any DB call.
+	admin, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+	if targetID == admin.ID {
+		writeError(w, http.StatusUnprocessableEntity, "CANNOT_CHANGE_OWN_PASSWORD", "use PATCH /api/v1/users/me/password to change your own password")
+		return
+	}
+
+	// 3. Parse request body.
+	var input struct {
+		NewPassword string `json:"new_password"`
+		Confirm     string `json:"new_password_confirmation"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+
+	// 4. Validate field presence and match — 400 on failure.
+	if err := service.ValidateAdminResetPasswordInput(input.NewPassword, input.Confirm); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// 5. Validate password complexity — 422 on failure (separate code from field errors).
+	if err := service.ValidatePasswordComplexity(input.NewPassword); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "PASSWORD_TOO_WEAK", err.Error())
+		return
+	}
+
+	// 6. Fetch target user — returns 404 for both missing and soft-deleted users.
+	user, err := h.userRepo.FindByID(r.Context(), targetID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "user not found")
+			return
+		}
+		h.logger.Error("failed to fetch user for password reset", "target_id", targetID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 7. Hash the new password.
+	hash, err := service.HashPassword(input.NewPassword)
+	if err != nil {
+		h.logger.Error("failed to hash password", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 8. Persist the new password hash.
+	if err := h.userRepo.UpdatePassword(r.Context(), targetID, hash); err != nil {
+		h.logger.Error("failed to update password", "target_id", targetID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 9. Invalidate active session — forces re-login with the new password.
+	if err := h.userRepo.ClearTokens(r.Context(), targetID); err != nil {
+		h.logger.Error("failed to clear tokens after password reset", "target_id", targetID, "error", err)
+	}
+
+	// 10. Write audit log (pure computation → persist).
+	auditEntry := service.BuildPasswordChangedAuditLog(targetID, admin.ID)
+	if err := h.auditRepo.Create(r.Context(), auditEntry); err != nil {
+		h.logger.Error("failed to write audit log for password reset", "target_id", targetID, "error", err)
+	}
+
+	writeSuccess(w, http.StatusOK, "USER_PASSWORD_CHANGED", map[string]any{
+		"user": map[string]any{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+			"role":  string(user.Role),
+		},
+	})
+}
+
 // Unlock handles PATCH /api/v1/admin/users/{id}/unlock.
 // Requires admin role — enforced at route level via RequireAuth + RequireRole("admin").
 func (h *AdminUserHandler) Unlock(w http.ResponseWriter, r *http.Request) {

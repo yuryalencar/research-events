@@ -194,6 +194,19 @@ func TestBuildHandler_AdminUnlockRouteRegistered(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, rec.Code, "PATCH /api/v1/admin/users/{id}/unlock must be registered")
 }
 
+func TestBuildHandler_AdminResetPasswordRouteRegistered(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml — PATCH /api/v1/admin/users/{id}/password must be registered.
+	// No token cookie → 401 from RequireAuth, not 404.
+	h := BuildHandler(testConfig(), nil, health.NewRegistry(), discardLogger, noop.NewTracerProvider())
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1/password", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.NotEqual(t, http.StatusNotFound, rec.Code, "PATCH /api/v1/admin/users/{id}/password must be registered")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "unauthenticated request must return 401")
+}
+
 func TestBuildHandler_AdminListUsersRouteRegistered(t *testing.T) {
 	// Spec: admin-users-list.yaml — GET /api/v1/admin/users must be registered.
 	// No token cookie → 401 from RequireAuth, not 404.

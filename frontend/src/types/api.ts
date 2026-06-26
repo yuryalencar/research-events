@@ -196,6 +196,70 @@ interface ReviewEventInput {
 
 type ReviewEventResult = EventListItem
 
+// --- Admin: GET /api/v1/admin/users ---
+
+interface ListAdminUsersParams {
+  roles?: string[]
+  search?: string
+  locked?: boolean
+  include_deleted?: boolean
+  page?: number
+  page_size?: number
+  pagination?: "on" | "off"
+}
+
+interface AdminUserListItem {
+  id: number
+  name: string
+  email: string
+  role: string
+  created_at: string
+  locked_at: string | null
+  deleted_at: string | null
+}
+
+// Shared user shape returned by all admin user action endpoints.
+interface AdminUserActionUser {
+  id: number
+  name: string
+  email: string
+  role: string
+}
+
+// --- Admin: POST /api/v1/admin/users ---
+
+interface RegisterAdminUserInput {
+  name: string
+  email: string
+  password: string
+  role: string
+}
+
+interface RegisterAdminUserResult {
+  user: AdminUserActionUser & { created_at: string }
+}
+
+// --- Admin: PATCH /api/v1/admin/users/{id}/role ---
+
+interface ChangeUserRoleInput {
+  role: string
+}
+
+interface ChangeUserRoleResult {
+  user: AdminUserActionUser
+}
+
+// --- Admin: PATCH /api/v1/admin/users/{id}/password ---
+
+interface ResetUserPasswordInput {
+  new_password: string
+  new_password_confirmation: string
+}
+
+interface ResetUserPasswordResult {
+  user: AdminUserActionUser
+}
+
 // --- Admin: PATCH /api/v1/admin/users/{id}/unlock ---
 
 interface UnlockUserResult {
@@ -246,6 +310,15 @@ export type {
   ReviewEventEditInput,
   ReviewEventInput,
   ReviewEventResult,
+  ListAdminUsersParams,
+  AdminUserListItem,
+  AdminUserActionUser,
+  RegisterAdminUserInput,
+  RegisterAdminUserResult,
+  ChangeUserRoleInput,
+  ChangeUserRoleResult,
+  ResetUserPasswordInput,
+  ResetUserPasswordResult,
   UnlockUserResult,
   HealthCheckResult,
   HealthResult,

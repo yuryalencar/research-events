@@ -267,6 +267,52 @@ func TestValidateRoleChangeInput_IsPure_SameInputReturnsSameOutput(t *testing.T)
 	assert.Equal(t, e1, e2)
 }
 
+// --- ValidateAdminResetPasswordInput --- (Cycle 7)
+// Spec: admin-users-reset-password.yaml — 400 when fields missing or mismatch; complexity checked separately
+
+func TestValidateAdminResetPasswordInput_ReturnsNilForMatchingPasswords(t *testing.T) {
+	err := service.ValidateAdminResetPasswordInput("NewPass@1", "NewPass@1")
+	assert.NoError(t, err)
+}
+
+func TestValidateAdminResetPasswordInput_ErrorWhenNewPasswordEmpty(t *testing.T) {
+	err := service.ValidateAdminResetPasswordInput("", "NewPass@1")
+	assert.Error(t, err)
+}
+
+func TestValidateAdminResetPasswordInput_ErrorWhenConfirmEmpty(t *testing.T) {
+	err := service.ValidateAdminResetPasswordInput("NewPass@1", "")
+	assert.Error(t, err)
+}
+
+func TestValidateAdminResetPasswordInput_ErrorWhenPasswordsMismatch(t *testing.T) {
+	// Spec: admin-users-reset-password.yaml border_case "passwords don't match → 400 VALIDATION_ERROR"
+	err := service.ValidateAdminResetPasswordInput("NewPass@1", "Different@2")
+	assert.Error(t, err)
+}
+
+func TestValidateAdminResetPasswordInput_PassesWhenComplexityWeakButFieldsMatch(t *testing.T) {
+	// ValidateAdminResetPasswordInput only checks presence and match — not complexity.
+	// Complexity is the handler's responsibility (separate ValidatePasswordComplexity call).
+	err := service.ValidateAdminResetPasswordInput("weak", "weak")
+	assert.NoError(t, err)
+}
+
+// --- BuildPasswordChangedAuditLog --- (Cycle 8)
+// Spec: admin-users-reset-password.yaml rule "Write AuditLog: entity_type=user, action=password_changed"
+
+func TestBuildPasswordChangedAuditLog_SetsEntityTypeAndAction(t *testing.T) {
+	entry := service.BuildPasswordChangedAuditLog(42, 1)
+	assert.Equal(t, model.AuditEntityUser, entry.EntityType)
+	assert.Equal(t, model.AuditActionPasswordChanged, entry.Action)
+}
+
+func TestBuildPasswordChangedAuditLog_SetsTargetAndAdminIDs(t *testing.T) {
+	entry := service.BuildPasswordChangedAuditLog(42, 7)
+	assert.Equal(t, uint(42), entry.EntityID)
+	assert.Equal(t, uint(7), entry.ChangedByID)
+}
+
 // --- BuildRoleChangedAuditLog --- (Cycle 6)
 // Spec: admin-users-change-role.yaml rule "Write AuditLog: action=role_changed, diff={role:{before,after}}"
 

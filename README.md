@@ -200,6 +200,8 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-26 | [Admin User Management — Backend](ai-sessions/2026-06-26-admin-user-management.md) | `POST /api/v1/admin/users` (register admin/moderator) + `PATCH /api/v1/admin/users/{id}/role` (role change with session invalidation). `ExistsByEmail`, `Create`, `UpdateRole` in repository; 5 FP service functions; `AuditActionRoleChanged`. 458 backend tests. |
 | 2026-06-26 | [Admin User Management — Frontend Planning](ai-sessions/2026-06-26-admin-user-management-frontend-planning.md) | Phase 0 not started — spec interview paused. 6 open questions logged. Resume from Phase 0. |
 | 2026-06-26 | [Admin Users List — Backend](ai-sessions/2026-06-26-admin-users-list-endpoint.md) | `GET /api/v1/admin/users` — paginated user list for admins. Filters: role (OR), name/email search (ILIKE), locked status, include_deleted. Response: id, name, email, role, created_at, locked_at, deleted_at (no password/token fields). 49 new tests across service/repository/handler/server. |
+| 2026-06-26 | [Admin Users — Reset Password Endpoint](ai-sessions/2026-06-26-admin-users-reset-password.md) | `PATCH /api/v1/admin/users/{id}/password` — admin resets any user's password (no current-password required), invalidates session via ClearTokens. `AuditActionPasswordChanged`, 2 FP service functions. 17 new tests; suite at 541. |
+| 2026-06-26 | [Admin User Management — Frontend](ai-sessions/2026-06-26-admin-user-management-frontend-implementation.md) | Full user management UI: paginated/filterable user list, expandable cards with 3 independent sections (role change, password reset, unlock), register form with success screen. 14 new cycles (hooks + components + pages). `checkPasswordComplexity` and `PasswordField` extracted as shared utilities. Typecheck clean. |
 
 ## Specs
 
@@ -241,6 +243,8 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Admin: Register User | [admin-users-register.yaml](specs/backend/admin-users-register.yaml) | Done |
 | Admin: Change User Role | [admin-users-change-role.yaml](specs/backend/admin-users-change-role.yaml) | Done |
 | Admin: List Users | [admin-users-list.yaml](specs/backend/admin-users-list.yaml) | Done |
+| Admin: Reset User Password | [admin-users-reset-password.yaml](specs/backend/admin-users-reset-password.yaml) | Done |
+| Admin User Management (Frontend) | [admin-user-management.md](specs/frontend/admin-user-management.md) | Done |
 
 ---
 
@@ -251,6 +255,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | [v0.1.0](https://github.com/yuryalencar/research-events/releases/tag/v0.1.0) | 2026-06-19 | Initial public release — Go API (auth, event submission, deadlines, admin review, OTel tracing), Globe homepage, 3D pins, event detail, submission wizard, management portal + dashboard, deadline management. |
 | [v0.1.1](https://github.com/yuryalencar/research-events/releases/tag/v0.1.1) | 2026-06-24 | Globe event clustering (`supercluster`), multi-event cluster drawer, year-from filter semantics, language selector, table view toggle, session guard, update password. |
 | [v0.1.2](https://github.com/yuryalencar/research-events/releases/tag/v0.1.2) | 2026-06-24 | Globe loading message progression — `useLoadingMessage` hook cycles through 4 messages while the backend cold-starts, improving perceived UX on first visit. |
+| [v0.1.3](https://github.com/yuryalencar/research-events/releases/tag/v0.1.3) | 2026-06-26 | Admin user management — 4 new backend endpoints (register, role change, list, password reset) + full frontend UI (user list with expandable cards, register form). |
 
 ---
 

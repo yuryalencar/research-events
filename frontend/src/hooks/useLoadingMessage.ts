@@ -24,7 +24,7 @@ interface UseLoadingMessageReturn {
 // prevent the effect from restarting on every render.
 function useLoadingMessage(
   isLoading: boolean,
-  { messages, initialDelay = 2500, interval = 1500 }: UseLoadingMessageOptions,
+  { messages, initialDelay = 3000, interval = 2500 }: UseLoadingMessageOptions,
 ): UseLoadingMessageReturn {
   const [index, setIndex] = useState(0)
 

@@ -1,6 +1,7 @@
 "use client"
 
 import type { JSX } from "react"
+import Link from "next/link"
 import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import { ChevronDown } from "lucide-react"
@@ -78,6 +79,18 @@ function ManageDashboard({ user }: ManageDashboardProps): JSX.Element {
 
       <main className="pb-4 pt-9 sm:pt-11">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 sm:px-6">
+        {/* Admin-only link to the user management section */}
+        {user.role === "admin" && (
+          <div className="flex justify-end">
+            <Link
+              href={`/${locale}/manage/admin/users`}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {t("manageUsersLink")}
+            </Link>
+          </div>
+        )}
+
         {/* Filter row */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
           {/* Status */}

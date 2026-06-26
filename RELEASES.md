@@ -2,6 +2,59 @@
 
 ---
 
+## v0.1.3 — June 26, 2026
+
+### Admin User Management (Backend + Frontend)
+
+Adds complete user management to the admin portal — four new API endpoints and a full frontend UI for listing, registering, and managing admin/moderator/contributor accounts.
+
+**Backend — New Endpoints**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/admin/users` | Register a new admin or moderator (admin only) |
+| `PATCH` | `/api/v1/admin/users/{id}/role` | Change a user's role; invalidates the target's session (admin only) |
+| `GET` | `/api/v1/admin/users` | Paginated, filterable user list (admin only) |
+| `PATCH` | `/api/v1/admin/users/{id}/password` | Reset any user's password; invalidates the target's session (admin only) |
+
+- **Register**: creates user with bcrypt-hashed password at cost 12; returns 409 `EMAIL_ALREADY_EXISTS` if email taken
+- **Role change**: prevents self-role change (`CANNOT_CHANGE_OWN_ROLE`); broadcasts `AuditActionRoleChanged`; clears all active tokens for the target so their next request forces re-login
+- **List**: filters by role (OR logic, comma-separated), name/email search (ILIKE), locked status, include_deleted; returns `id, name, email, role, created_at, locked_at, deleted_at` — no password/token fields ever exposed; paginated with `meta.total`
+- **Password reset**: no current-password required for admin path; rejects weak passwords (`PASSWORD_TOO_WEAK`); prevents admin changing own password via this endpoint (`CANNOT_CHANGE_OWN_PASSWORD`); clears all tokens for target; writes `AuditActionPasswordChanged`
+
+**Frontend — Admin User Management UI**
+
+*Routes*
+- `/manage/admin/users` — paginated, filterable user list (admin only)
+- `/manage/admin/users/register` — register new admin/moderator (admin only)
+- Admin events dashboard gains a "Manage Users" link (admin role only, top-right)
+
+*User List*
+- Search by name or email; role chips (admin / moderator / contributor) and status chips (Locked / Deleted) displayed on separate labelled rows
+- Draft-gated filters — changes don't fetch until "Apply" is clicked; pagination uses applied filters, never the draft
+- 20 results per page, Prev/Next controls with total count
+
+*Expandable User Card — Three Independent Sections*
+- **Change Role** — select + Apply; confirmation modal; inline success/error banner; reverts optimistically on API failure
+- **Reset Password** — dual password fields with 4-rule complexity checklist (8+ chars, uppercase, lowercase, special) + mismatch guard; confirmation modal; inline success/error banner; clears fields on success
+- **Unlock Account** — visible only when account is locked; single Unlock button; inline success/error banner; section disappears on success
+
+*Register User Form*
+- Fields: name, email, role (admin/moderator), password + confirm password with live complexity checklist
+- Confirmation modal before submission; success screen with registered user details + "Register another user" / "Back to users list" actions
+- `onAuthError` callback redirects to login if session expires mid-submission
+
+*Shared Utilities Added*
+- `checkPasswordComplexity` extracted to `lib/utils.ts` — reused by user card, register form, and update-password page
+- `PasswordField` + `ComplexityItem` extracted to `components/ui/PasswordField.tsx` — shared across all three password contexts
+- `apiPrivateRequestWithMeta` added to the API client — authenticated paginated list calls with automatic `TOKEN_EXPIRED` refresh
+
+*Internationalisation*
+- Full `manage.users.*` namespace in all 4 locales (English, Portuguese, Spanish, German)
+- 5 new error codes translated: `EMAIL_ALREADY_EXISTS`, `CANNOT_CHANGE_OWN_PASSWORD`, `PASSWORD_TOO_WEAK`, `ROLE_UNCHANGED`, `CANNOT_CHANGE_OWN_ROLE`
+
+---
+
 ## v0.1.2 — June 24, 2026
 
 ### Globe Loading Message Progression

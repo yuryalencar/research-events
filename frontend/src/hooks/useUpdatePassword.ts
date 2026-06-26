@@ -3,18 +3,11 @@ import { useState, useMemo, useCallback } from "react"
 import { updatePassword } from "@/lib/api/users"
 import { handleApiError } from "@/lib/api/errors"
 import { ApiError } from "@/lib/api/client"
+import { checkPasswordComplexity } from "@/lib/utils"
+import type { PasswordComplexity } from "@/lib/utils"
 
 // Codes that mean the session is gone (not just a bad request) — warrant a redirect to login.
 const AUTH_ERROR_CODES = new Set(["TOKEN_MISSING", "TOKEN_EXPIRED", "TOKEN_INVALID"])
-
-// --- Types ---
-
-interface PasswordComplexity {
-  minLength: boolean
-  hasUppercase: boolean
-  hasLowercase: boolean
-  hasSpecial: boolean
-}
 
 type UpdatePasswordPhase = "idle" | "submitting" | "success"
 
@@ -51,12 +44,7 @@ function useUpdatePassword(t: (key: string) => string, onAuthError?: () => void)
   const [phase, setPhase] = useState<UpdatePasswordPhase>("idle")
 
   // 2. Derived values
-  const complexity = useMemo<PasswordComplexity>(() => ({
-    minLength: newPassword.length >= 8,
-    hasUppercase: /[A-Z]/.test(newPassword),
-    hasLowercase: /[a-z]/.test(newPassword),
-    hasSpecial: /[^A-Za-z0-9]/.test(newPassword),
-  }), [newPassword])
+  const complexity = useMemo<PasswordComplexity>(() => checkPasswordComplexity(newPassword), [newPassword])
 
   // Mismatch is only shown once the user has started typing in the confirm field.
   const confirmMismatch = confirmPassword.length > 0 && confirmPassword !== newPassword
@@ -123,4 +111,5 @@ function useUpdatePassword(t: (key: string) => string, onAuthError?: () => void)
 // --- Export ---
 
 export { useUpdatePassword }
-export type { UseUpdatePasswordReturn, PasswordComplexity, UpdatePasswordPhase }
+export type { UseUpdatePasswordReturn, UpdatePasswordPhase }
+export type { PasswordComplexity } from "@/lib/utils"

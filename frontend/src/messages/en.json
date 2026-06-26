@@ -33,7 +33,12 @@
     "RATE_LIMIT_EXCEEDED": "Too many requests. Please wait a moment and try again.",
     "INTERNAL_ERROR": "Something went wrong on our end. Please try again later.",
     "NETWORK_ERROR": "Couldn't connect to the server. Check your connection and try again.",
-    "UNKNOWN": "Something went wrong. Please try again."
+    "UNKNOWN": "Something went wrong. Please try again.",
+    "EMAIL_ALREADY_EXISTS": "A user with this email already exists.",
+    "CANNOT_CHANGE_OWN_PASSWORD": "Use your own profile settings to change your password.",
+    "PASSWORD_TOO_WEAK": "Password must be at least 8 characters with uppercase, lowercase, and a special character.",
+    "ROLE_UNCHANGED": "User already has this role.",
+    "CANNOT_CHANGE_OWN_ROLE": "You can't change your own role."
   },
   "home": {
     "loadingStep1": "Loading events…",
@@ -303,7 +308,8 @@
       "nextButton": "Next →",
       "loading": "Loading events…",
       "empty": "No events match the current filters.",
-      "errorLoad": "Failed to load events. Try again."
+      "errorLoad": "Failed to load events. Try again.",
+      "manageUsersLink": "Manage Users"
     },
     "review": {
       "stepIndicator": "Step {current} of {total}",
@@ -374,6 +380,81 @@
         "conferenceLink": "Conference website",
         "backButton": "← Back to Review",
         "doneButton": "Done →"
+      }
+    },
+    "users": {
+      "pageTitle": "Users",
+      "backToEvents": "← Back to Events",
+      "registerButton": "Register User",
+      "filters": {
+        "searchPlaceholder": "Search by name or email",
+        "rolesLabel": "Roles",
+        "statusLabel": "Status",
+        "lockedBadge": "Locked",
+        "deletedBadge": "Deleted",
+        "apply": "Apply",
+        "reset": "Reset"
+      },
+      "list": {
+        "loading": "Loading users…",
+        "error": "Failed to load users. Try again.",
+        "empty": "No users match the current filters.",
+        "pageLabel": "Page {page} of {totalPages} ({total} users)",
+        "prevButton": "← Prev",
+        "nextButton": "Next →"
+      },
+      "card": {
+        "lockedBadge": "Locked",
+        "deletedBadge": "Deleted",
+        "expand": "Expand user",
+        "collapse": "Collapse user",
+        "deletedBanner": "This user account has been deleted.",
+        "roleSection": "Change Role",
+        "roleLabel": "Role",
+        "applyRole": "Apply Role",
+        "roleSuccess": "Role updated to {role}",
+        "roleConfirmTitle": "Change role",
+        "roleConfirmBody": "Change role from {from} to {to}?",
+        "passwordSection": "Reset Password",
+        "newPasswordLabel": "New password",
+        "confirmPasswordLabel": "Confirm password",
+        "passwordMismatch": "Passwords do not match",
+        "applyPassword": "Apply Password",
+        "passwordSuccess": "Password updated",
+        "passwordConfirmTitle": "Reset password",
+        "passwordConfirmBody": "Password will be updated for {name}.",
+        "unlockSection": "Unlock Account",
+        "unlockDescription": "This account is currently locked.",
+        "unlockButton": "Unlock User",
+        "unlockSuccess": "Account unlocked",
+        "confirmCancel": "Cancel",
+        "confirmConfirm": "Confirm"
+      },
+      "register": {
+        "pageTitle": "Register User",
+        "backToUsers": "← Back to Users",
+        "nameLabel": "Name",
+        "emailLabel": "Email",
+        "roleLabel": "Role",
+        "rolePlaceholder": "Select role",
+        "passwordLabel": "Password",
+        "confirmLabel": "Confirm password",
+        "passwordMismatch": "Passwords do not match",
+        "submitButton": "Register User",
+        "confirmTitle": "Confirm registration",
+        "confirmBody": "Create {role} account for {email}?",
+        "confirmCancel": "Cancel",
+        "confirmCreate": "Create",
+        "errorBanner": "Registration failed. Please try again.",
+        "success": {
+          "title": "User registered",
+          "subtitle": "{name} has been added as {role}.",
+          "nameLabel": "Name",
+          "emailLabel": "Email",
+          "roleLabel": "Role",
+          "registerAnother": "Register another user",
+          "backToUsers": "Back to users list"
+        }
       }
     }
   },

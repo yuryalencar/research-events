@@ -133,6 +133,36 @@ func BuildRoleChangedAuditLog(targetID, adminID uint, oldRole, newRole model.Use
 	}
 }
 
+// FP: pure function
+// ValidateAdminResetPasswordInput checks that both password fields are present and that they
+// match. Unlike user self-service password update, no current_password is required here —
+// admin authentication is the gate. Complexity is checked separately by the handler so that
+// the error code (422 PASSWORD_TOO_WEAK) can be distinguished from field-presence errors (400).
+// Pure: depends only on arguments, no I/O, deterministic.
+func ValidateAdminResetPasswordInput(newPw, confirm string) error {
+	if newPw == "" || confirm == "" {
+		return errors.New("new_password and new_password_confirmation are required")
+	}
+	if newPw != confirm {
+		return errors.New("new_password and new_password_confirmation do not match")
+	}
+	return nil
+}
+
+// FP: no side effects
+// BuildPasswordChangedAuditLog computes the AuditLog entry for an admin password reset.
+// The password hash is never stored in the diff — only the action is recorded so the audit
+// trail proves the change happened without leaking credential material.
+// Persistence is the handler's responsibility — this function only builds the value.
+func BuildPasswordChangedAuditLog(targetID, adminID uint) model.AuditLog {
+	return model.AuditLog{
+		EntityType:  model.AuditEntityUser,
+		EntityID:    targetID,
+		Action:      model.AuditActionPasswordChanged,
+		ChangedByID: adminID,
+	}
+}
+
 // FP: no side effects
 // HashPassword wraps bcrypt.GenerateFromPassword at cost 12 — the same cost
 // used by the login flow (see specs/backend/auth-login.yaml, rules section).
