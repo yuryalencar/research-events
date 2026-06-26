@@ -53,7 +53,7 @@ A collaborative, open-source platform that aggregates research conferences and e
 │   │   │   └── admin/                     # ReviewCard, ApproveButton
 │   │   ├── lib/
 │   │   │   ├── api.ts                     # Typed fetch client for Go backend
-│   │   │   ├── constants.ts
+│   │   │   ├── constants.ts               # APP_VERSION and shared constants
 │   │   │   └── utils.ts
 │   │   ├── hooks/                         # useEvents, useGlobeState, useFilters
 │   │   ├── types/
@@ -104,6 +104,7 @@ A collaborative, open-source platform that aggregates research conferences and e
 │   │   └── auth-login.curl.sh             # curl examples — generated after spec approval
 │   └── frontend/                          # Markdown specs for frontend features
 ├── README.md                              # Index: all specs + sessions (one-line descriptions)
+├── RELEASES.md                            # Release notes (one entry per version)
 ├── docker-compose.yml                     # Local Postgres only
 ├── Makefile                               # Unified commands for both services
 └── CLAUDE.md
@@ -133,94 +134,6 @@ make migrate-down                   # Roll back last migration
 make generate-types                 # Regenerate frontend/src/types/api.ts from OpenAPI spec
 make generate-mocks                 # Regenerate all gomock files from interfaces
 ```
-
----
-
-## Data Model (Core)
-
-```
-User
-  id, name, email, password_hash
-  role  (admin | moderator | contributor)
-         ← contributor: no password yet; created automatically on first submission
-         ← password-less contributors can claim their account later (future feature)
-  created_at
-
-Event
-  id, name, slug
-  country, city
-  latitude, longitude       ← set by submitter via Leaflet map picker; never geocoded automatically
-  start_date, end_date
-  website_url
-  domain                    ← extensible string enum (software_engineering | computer_science | ...)
-                               platform will expand to other fields (medicine, etc.) in the future
-  status                    ← pending | approved | rejected
-  year                      ← indexed; default filter = current year
-  created_by_id  (FK → User)       ← first submitter; shown as "Added by <name> on <date>"
-  last_updated_by_id (FK → User)   ← most recent editor; shown as "Updated by <name> on <date>"
-  created_at, updated_at
-
-Deadline (belongs to Event)
-  id, event_id
-  type         ← abstract | paper | notification | camera_ready | other
-  description  ← free text, e.g. "Research track", "Industry innovation track"
-  date
-  is_optional
-  is_active    ← false when superseded by a newer deadline of the same type
-  superseded_by_id (FK → Deadline, nullable)  ← points to the replacement deadline
-  created_by_id (FK → User)
-  created_at
-  ← Never update a deadline in place. Always create a new Deadline record,
-    set the old one's is_active=false and superseded_by_id=<new id>.
-  ← UI: show only is_active=true deadlines by default;
-    "view history" toggle reveals the full chain per type.
-
-AuditLog
-  id
-  entity_type  ← "event" | "deadline"
-  entity_id
-  action       ← "created" | "updated" | "approved" | "rejected" | "deadline_added" | "deadline_superseded"
-  changed_by_id (FK → User)
-  diff         ← JSONB — stores before/after values of changed fields
-  created_at
-  ← Every state change to Event or Deadline must write an AuditLog row.
-    This is the source of truth for the full history shown in the UI.
-```
-
----
-
-## Contributor Flow (Event Submission)
-
-1. Public user fills out submission form — provides **name**, **email**, event details, and drops a pin on the Leaflet map to set lat/lng.
-2. Backend checks if email exists in `users` table:
-   - **Exists** → link `event.created_by_id` to that user (no new user created).
-   - **Does not exist** → create a new `User` with `role=contributor`, `name`, `email`, and `password_hash=NULL`. Link event to them.
-3. Event is created with `status=pending`. An `AuditLog` row is written (`action=created`).
-4. Admin reviews and approves/rejects. Each action writes another `AuditLog` row.
-5. Any subsequent update (e.g. deadline change) by any user writes to `AuditLog` and updates `event.last_updated_by_id`.
-6. Future: contributor can set a password to claim their account and log in.
-
----
-
-## API Design
-
-- Base path: `/api/v1/`
-- Response envelope (matches `internal/handler/auth.go` `writeSuccess`/`writeSuccessWithMeta`/`writeError`):
-  - Success: `{ "code": "SOME_CODE", "data": T }`
-  - Success (list endpoints): `{ "code": "SOME_CODE", "data": T[], "meta": { "page": N, "total": N } }`
-  - Error: `{ "code": "EVENT_NOT_FOUND", "error": { "message": "..." } }`
-- Key endpoints:
-  - `GET    /api/v1/events` — filterable by `year`, `domain`, `country`, `bbox`
-  - `GET    /api/v1/events/:id` — includes active deadlines + contributor attribution
-  - `GET    /api/v1/events/:id/deadlines` — all deadlines grouped by type (active + history)
-  - `GET    /api/v1/events/:id/audit` — full audit log for an event
-  - `POST   /api/v1/events/submit` — public, no auth; triggers contributor lookup/creation
-  - `GET    /api/v1/admin/events?status=pending` — admin only
-  - `PATCH  /api/v1/admin/events/:id/review` — approve or reject; writes AuditLog
-  - `POST   /api/v1/events/:id/deadlines` — add/update a deadline (supersedes existing)
-  - `POST   /api/v1/auth/login` — returns JWT in HTTP-only cookie
-- `bbox` param format: `?bbox=minLng,minLat,maxLng,maxLat` — filters events to globe viewport
-  - `GET    /health` — public, no auth; returns detailed system status (see Health Check section)
 
 ---
 
@@ -366,57 +279,6 @@ func enrichEvent(e *Event, year int) {
 - Traces exported to Sentry via OTLP exporter (`internal/observability/otel.go`)
 - Always pass `context.Context` through the call stack so spans propagate correctly — never start a new root span mid-request
 - Required span attributes: `http.method`, `http.route`, `db.operation` (for DB spans), `error` (bool)
-
-### Health Check
-
-`GET /health` — public endpoint, no authentication required.
-
-**Response shape:**
-```json
-{
-  "status": "healthy",
-  "version": "1.0.0",
-  "timestamp": "2026-01-15T10:00:00Z",
-  "uptime": "3h22m10s",
-  "checks": {
-    "database": {
-      "status": "healthy",
-      "latency_ms": 4
-    },
-    "future_dependency": {
-      "status": "unhealthy",
-      "error": "connection refused"
-    }
-  }
-}
-```
-
-**Status rules:**
-- Top-level `status` is `"healthy"` only when ALL checks pass — any single failure makes it `"unhealthy"`
-- HTTP response code: `200` when healthy, `503` when unhealthy
-- Database check: runs `SELECT 1` with a 3-second timeout via `context.WithTimeout`
-
-**Architecture — extensible checker pattern:**
-```go
-// internal/health/health.go
-type Checker interface {
-    Name() string
-    Check(ctx context.Context) CheckResult
-}
-
-type CheckResult struct {
-    Status    string `json:"status"`           // "healthy" | "unhealthy"
-    LatencyMs int64  `json:"latency_ms,omitempty"`
-    Error     string `json:"error,omitempty"`
-}
-```
-New dependencies (cache, external API, etc.) implement `Checker` and register themselves — the handler never changes.
-
-**Test requirements for health check:**
-- `TestHealth_AllChecksPass` → returns 200 + `status: healthy`
-- `TestHealth_DatabaseUnhealthy` → returns 503 + `status: unhealthy` + db error populated
-- `TestHealth_NewCheckerUnhealthy` → adding a failing checker propagates to top-level status
-- Mock all checkers with gomock — never hit a real DB in handler tests
 
 ---
 
@@ -1263,6 +1125,57 @@ Note: all feature contracts live in the spec files — no separate `docs/` folde
   - `test:` commits should appear **before** the `feat:` commit they enable (Red before Green)
 - One logical change per commit — never bundle unrelated files
 - PRs require the full commit gate to pass (see TDD section)
+
+---
+
+## Release Protocol
+
+A release is created when a meaningful set of features is complete and all tests pass. There is no fixed cadence — release when the work warrants it.
+
+### Version numbering
+
+`vMAJOR.MINOR.PATCH` — follow semantic versioning loosely:
+- **PATCH** (`0.1.x`) — bug fixes, small improvements, no new user-facing features
+- **MINOR** (`0.x.0`) — new user-facing features or meaningful capability additions
+- **MAJOR** (`x.0.0`) — reserved for breaking changes or a significant platform milestone
+
+### Release checklist — in this order
+
+1. **Run the full test suite** — both projects must be green before any release step:
+   ```bash
+   cd backend && go test ./... && go vet ./...
+   cd frontend && pnpm typecheck && pnpm test --run
+   ```
+
+2. **Bump the version in two places:**
+   - `frontend/package.json` → `"version": "X.Y.Z"`
+   - `frontend/src/lib/constants.ts` → `APP_VERSION = "X.Y.Z"` (shown in the Info Modal)
+
+3. **Write the `RELEASES.md` entry** at the top of the file, above the previous version:
+   - Cover everything shipped since the last release (backend endpoints + frontend features)
+   - Group by area (Backend, Frontend) with bullet points per change
+   - Reference the spec files for detail — `RELEASES.md` is a summary, not a spec
+
+4. **Update `README.md`:**
+   - Add a row to the **Releases** table: version, date, one-line highlights
+   - Add a row to the **Specs** table for any new spec files included in this release
+
+5. **Commit with conventional format:**
+   ```
+   chore: release vX.Y.Z — <short description of what shipped>
+   ```
+   This commit includes only the version bumps + RELEASES.md + README.md changes. Feature code must already be committed separately before this step.
+
+### What belongs in RELEASES.md
+
+- New API endpoints (method + path + one-line description)
+- New frontend pages or major UI sections
+- New shared utilities or hooks that change how future features are built
+- i18n additions (new locales or new namespaces)
+- Infrastructure or observability changes visible in production
+- Bug fixes that affected production behaviour
+
+Do **not** include: refactors with no behaviour change, test additions, docs-only commits, or internal tooling changes invisible to users.
 
 ---
 
