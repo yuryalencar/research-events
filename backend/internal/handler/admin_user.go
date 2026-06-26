@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/yuryalencar/research-events/internal/middleware"
+	"github.com/yuryalencar/research-events/internal/model"
 	"github.com/yuryalencar/research-events/internal/repository"
 	"github.com/yuryalencar/research-events/internal/service"
 )
@@ -36,6 +38,159 @@ func NewAdminUserHandler(
 }
 
 // --- Public methods ---
+
+// Register handles POST /api/v1/admin/users.
+// Admin only — registers a new admin or moderator with a hashed password.
+func (h *AdminUserHandler) Register(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse request body.
+	var input struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+
+	// 2. Validate: required fields, allowed role, password complexity.
+	if err := service.ValidateRegisterInput(input.Name, input.Email, input.Password, input.Role); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// 3. Check email uniqueness (including soft-deleted rows — they still hold the unique slot).
+	exists, err := h.userRepo.ExistsByEmail(r.Context(), input.Email)
+	if err != nil {
+		h.logger.Error("failed to check email existence", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+	if exists {
+		writeError(w, http.StatusConflict, "EMAIL_ALREADY_EXISTS", "a user with this email already exists")
+		return
+	}
+
+	// 4. Hash password — computation only, no I/O.
+	hash, err := service.HashPassword(input.Password)
+	if err != nil {
+		h.logger.Error("failed to hash password", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 5. Build user value (pure, no mutation).
+	newUser := service.BuildRegisterUser(input.Name, input.Email, hash, model.UserRole(input.Role))
+
+	// 6. Persist.
+	created, err := h.userRepo.Create(r.Context(), newUser)
+	if err != nil {
+		h.logger.Error("failed to create user", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 7. Write audit log (pure computation → persist).
+	admin, _ := middleware.AuthUserFromContext(r.Context())
+	auditEntry := service.BuildRegisterAuditLog(created.ID, admin.ID, created.Name, created.Email, created.Role)
+	if err := h.auditRepo.Create(r.Context(), auditEntry); err != nil {
+		h.logger.Error("failed to write audit log for user registration", "user_id", created.ID, "error", err)
+	}
+
+	writeSuccess(w, http.StatusCreated, "USER_REGISTERED", map[string]any{
+		"user": map[string]any{
+			"id":         created.ID,
+			"name":       created.Name,
+			"email":      created.Email,
+			"role":       string(created.Role),
+			"created_at": created.CreatedAt,
+		},
+	})
+}
+
+// ChangeRole handles PATCH /api/v1/admin/users/{id}/role.
+// Admin only — changes a user's role and invalidates their active session.
+func (h *AdminUserHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse target user ID.
+	rawID := r.PathValue("id")
+	targetID64, err := strconv.ParseUint(rawID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", ":id must be a valid integer")
+		return
+	}
+	targetID := uint(targetID64)
+
+	// 2. Self-change guard — checked before any DB call.
+	admin, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+	if targetID == admin.ID {
+		writeError(w, http.StatusUnprocessableEntity, "CANNOT_CHANGE_OWN_ROLE", "admins cannot change their own role")
+		return
+	}
+
+	// 3. Parse and validate role from body.
+	var input struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+	if err := service.ValidateRoleChangeInput(input.Role); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// 4. Fetch target user.
+	user, err := h.userRepo.FindByID(r.Context(), targetID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "user not found")
+			return
+		}
+		h.logger.Error("failed to fetch user for role change", "target_id", targetID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 5. No-op guard — same role is a conflict, not a silent success.
+	newRole := model.UserRole(input.Role)
+	if user.Role == newRole {
+		writeError(w, http.StatusConflict, "ROLE_UNCHANGED", "user already has role '"+string(newRole)+"'")
+		return
+	}
+
+	// 6. Persist role change.
+	if err := h.userRepo.UpdateRole(r.Context(), targetID, newRole); err != nil {
+		h.logger.Error("failed to update role", "target_id", targetID, "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return
+	}
+
+	// 7. Invalidate active session — forces re-login under the new role.
+	if err := h.userRepo.ClearTokens(r.Context(), targetID); err != nil {
+		h.logger.Error("failed to clear tokens after role change", "target_id", targetID, "error", err)
+	}
+
+	// 8. Write audit log (pure computation → persist).
+	auditEntry := service.BuildRoleChangedAuditLog(targetID, admin.ID, user.Role, newRole)
+	if err := h.auditRepo.Create(r.Context(), auditEntry); err != nil {
+		h.logger.Error("failed to write audit log for role change", "target_id", targetID, "error", err)
+	}
+
+	writeSuccess(w, http.StatusOK, "USER_ROLE_CHANGED", map[string]any{
+		"user": map[string]any{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+			"role":  string(newRole),
+		},
+	})
+}
 
 // Unlock handles PATCH /api/v1/admin/users/{id}/unlock.
 // Requires admin role — enforced at route level via RequireAuth + RequireRole("admin").

@@ -27,6 +27,9 @@ var ErrNotFound = errors.New("record not found")
 type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (model.User, error)
 	FindByID(ctx context.Context, id uint) (model.User, error)
+	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	Create(ctx context.Context, user model.User) (model.User, error)
+	UpdateRole(ctx context.Context, userID uint, newRole model.UserRole) error
 	UpdateTokens(ctx context.Context, userID uint, jti string, jtiExp time.Time, refreshHash string, refreshExp time.Time) error
 	ClearTokens(ctx context.Context, userID uint) error
 	IncrementFailedAttempts(ctx context.Context, userID uint) error
@@ -49,6 +52,26 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 }
 
 // --- Public methods ---
+
+func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Unscoped().Model(&model.User{}).
+		Where("email = ?", email).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *userRepository) Create(ctx context.Context, user model.User) (model.User, error) {
+	err := r.db.WithContext(ctx).Create(&user).Error
+	return user, err
+}
+
+func (r *userRepository) UpdateRole(ctx context.Context, userID uint, newRole model.UserRole) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
+		Update("role", newRole).Error
+}
 
 func (r *userRepository) FindByEmail(ctx context.Context, email string) (model.User, error) {
 	var user model.User

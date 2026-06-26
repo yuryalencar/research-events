@@ -5,6 +5,8 @@ package repository_test
 // Spec: specs/backend/auth-refresh-token.yaml
 // Spec: specs/backend/admin-users-unlock.yaml
 // Spec: specs/backend/users-update-password.yaml
+// Spec: specs/backend/admin-users-register.yaml
+// Spec: specs/backend/admin-users-change-role.yaml
 
 import (
 	"context"
@@ -305,6 +307,156 @@ func TestUserRepository_UpdatePassword_PersistsNewHash(t *testing.T) {
 	require.NoError(t, tx.First(&updated, u.ID).Error)
 	require.NotNil(t, updated.PasswordHash)
 	assert.Equal(t, string(newHash), *updated.PasswordHash)
+}
+
+// --- ExistsByEmail ---
+
+func TestUserRepository_ExistsByEmail_ReturnsTrueForActiveUser(t *testing.T) {
+	// Spec: admin-users-register.yaml — email taken by active user → 409 EMAIL_ALREADY_EXISTS
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "hashed"
+	require.NoError(t, tx.Create(&model.User{
+		Name:         "Alice",
+		Email:        "exists-active@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleAdmin,
+	}).Error)
+
+	exists, err := repo.ExistsByEmail(context.Background(), "exists-active@example.com")
+
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestUserRepository_ExistsByEmail_ReturnsTrueForSoftDeletedUser(t *testing.T) {
+	// Spec: admin-users-register.yaml — soft-deleted rows still occupy the unique email slot
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "hashed"
+	u := model.User{
+		Name:         "Deleted",
+		Email:        "exists-deleted@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleAdmin,
+	}
+	require.NoError(t, tx.Create(&u).Error)
+	require.NoError(t, tx.Delete(&u).Error)
+
+	exists, err := repo.ExistsByEmail(context.Background(), "exists-deleted@example.com")
+
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestUserRepository_ExistsByEmail_ReturnsFalseWhenEmailNotFound(t *testing.T) {
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+
+	exists, err := repo.ExistsByEmail(context.Background(), "nobody@example.com")
+
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+// --- Create ---
+
+func TestUserRepository_Create_PersistsUserAndReturnsWithID(t *testing.T) {
+	// Spec: admin-users-register.yaml DoD "Returns 201 + user data on valid registration"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "hashed-password"
+	u := model.User{
+		Name:         "Jane Doe",
+		Email:        "create-jane@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleModerator,
+	}
+
+	created, err := repo.Create(context.Background(), u)
+
+	require.NoError(t, err)
+	assert.NotZero(t, created.ID)
+	assert.Equal(t, "Jane Doe", created.Name)
+	assert.Equal(t, "create-jane@example.com", created.Email)
+	assert.Equal(t, model.UserRoleModerator, created.Role)
+	assert.False(t, created.CreatedAt.IsZero())
+}
+
+func TestUserRepository_Create_ReturnsErrorOnDuplicateEmail(t *testing.T) {
+	// Spec: admin-users-register.yaml — unique index on email enforced at DB level
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "hashed"
+	require.NoError(t, tx.Create(&model.User{
+		Name:         "First",
+		Email:        "dup@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleAdmin,
+	}).Error)
+
+	_, err := repo.Create(context.Background(), model.User{
+		Name:         "Second",
+		Email:        "dup@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleModerator,
+	})
+
+	require.Error(t, err)
+}
+
+// --- UpdateRole ---
+
+func TestUserRepository_UpdateRole_ChangesRoleInDB(t *testing.T) {
+	// Spec: admin-users-change-role.yaml DoD "Returns 200 + user data (with new role) on valid role change"
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	u := model.User{Name: "Bob", Email: "updaterole-bob@example.com", Role: model.UserRoleContributor}
+	require.NoError(t, tx.Create(&u).Error)
+
+	err := repo.UpdateRole(context.Background(), u.ID, model.UserRoleModerator)
+	require.NoError(t, err)
+
+	var updated model.User
+	require.NoError(t, tx.First(&updated, u.ID).Error)
+	assert.Equal(t, model.UserRoleModerator, updated.Role)
+}
+
+func TestUserRepository_UpdateRole_LeavesOtherFieldsUnchanged(t *testing.T) {
+	// Spec: admin-users-change-role.yaml — only the role column is modified
+	tx, rollback := beginTx(t)
+	defer rollback()
+
+	repo := repository.NewUserRepository(tx)
+	hash := "hashed"
+	u := model.User{
+		Name:         "Carol",
+		Email:        "updaterole-carol@example.com",
+		PasswordHash: &hash,
+		Role:         model.UserRoleContributor,
+	}
+	require.NoError(t, tx.Create(&u).Error)
+
+	require.NoError(t, repo.UpdateRole(context.Background(), u.ID, model.UserRoleAdmin))
+
+	var updated model.User
+	require.NoError(t, tx.First(&updated, u.ID).Error)
+	assert.Equal(t, "Carol", updated.Name)
+	assert.Equal(t, "updaterole-carol@example.com", updated.Email)
+	require.NotNil(t, updated.PasswordHash)
+	assert.Equal(t, hash, *updated.PasswordHash)
 }
 
 func TestUserRepository_UpdatePassword_NewHashVerifiableWithBcrypt(t *testing.T) {

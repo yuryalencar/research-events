@@ -1,10 +1,14 @@
 package handler_test
 
 // Spec: specs/backend/admin-users-unlock.yaml
+// Spec: specs/backend/admin-users-register.yaml
+// Spec: specs/backend/admin-users-change-role.yaml
 // Rule: "Only admins can unlock — admin cannot unlock themselves"
 // Rule: "Write AuditLog with entity_type=user, action=unlocked"
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -192,5 +196,415 @@ func TestAdminUserHandler_Unlock_WritesAuditLogWithCorrectFields(t *testing.T) {
 	unlockMux(h).ServeHTTP(rec, unlockReq(adminID, targetID))
 
 	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+// --- Register helpers ---
+
+func registerMux(h *handler.AdminUserHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/admin/users", h.Register)
+	return mux
+}
+
+func registerReq(adminID uint, body map[string]any) *http.Request {
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	return req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{
+		ID:   adminID,
+		Role: "admin",
+		Name: "Admin",
+	}))
+}
+
+func validRegisterBody() map[string]any {
+	return map[string]any{
+		"name":     "Jane Doe",
+		"email":    "jane@example.com",
+		"password": "Secret@123",
+		"role":     "moderator",
+	}
+}
+
+// --- Register tests (Cycle 7) ---
+
+func TestAdminUserHandler_Register_Returns201ForValidModeratorRegistration(t *testing.T) {
+	// Spec: admin-users-register.yaml DoD "Returns 201 + user data on valid registration"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	hash := "bcrypt-hash"
+	created := model.User{Model: gorm.Model{ID: 10}, Name: "Jane Doe", Email: "jane@example.com", Role: model.UserRoleModerator, PasswordHash: &hash}
+
+	mockUserRepo.EXPECT().ExistsByEmail(gomock.Any(), "jane@example.com").Return(false, nil)
+	mockUserRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(created, nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(adminID, validRegisterBody()))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "USER_REGISTERED", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns201ForValidAdminRegistration(t *testing.T) {
+	// Spec: admin-users-register.yaml border_case "Admin registers another admin → 201"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	hash := "bcrypt-hash"
+	created := model.User{Model: gorm.Model{ID: 11}, Name: "John Admin", Email: "john@example.com", Role: model.UserRoleAdmin, PasswordHash: &hash}
+
+	mockUserRepo.EXPECT().ExistsByEmail(gomock.Any(), "john@example.com").Return(false, nil)
+	mockUserRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(created, nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+
+	body := map[string]any{"name": "John Admin", "email": "john@example.com", "password": "Secret@123", "role": "admin"}
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "USER_REGISTERED", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForMissingName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	delete(body, "name")
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForMissingEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	delete(body, "email")
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForMissingPassword(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	delete(body, "password")
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForMissingRole(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	delete(body, "role")
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForContributorRole(t *testing.T) {
+	// Spec: admin-users-register.yaml border_case "role = contributor → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	body["role"] = "contributor"
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForInvalidRole(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	body["role"] = "superuser"
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns400ForWeakPassword(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	body := validRegisterBody()
+	body["password"] = "weakpass"
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_Returns409WhenEmailAlreadyExists(t *testing.T) {
+	// Spec: admin-users-register.yaml DoD "Returns 409 EMAIL_ALREADY_EXISTS for email taken"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().ExistsByEmail(gomock.Any(), "jane@example.com").Return(true, nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(1, validRegisterBody()))
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "EMAIL_ALREADY_EXISTS", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_Register_WritesAuditLogOnSuccess(t *testing.T) {
+	// Spec: admin-users-register.yaml rule "Write AuditLog: entity_type=user, action=created"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	hash := "bcrypt-hash"
+	created := model.User{Model: gorm.Model{ID: 20}, Name: "Jane Doe", Email: "jane@example.com", Role: model.UserRoleModerator, PasswordHash: &hash}
+
+	mockUserRepo.EXPECT().ExistsByEmail(gomock.Any(), "jane@example.com").Return(false, nil)
+	mockUserRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(created, nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(model.AuditLog{})).
+		DoAndReturn(func(_ any, log model.AuditLog) error {
+			assert.Equal(t, model.AuditEntityUser, log.EntityType)
+			assert.Equal(t, created.ID, log.EntityID)
+			assert.Equal(t, model.AuditActionCreated, log.Action)
+			assert.Equal(t, adminID, log.ChangedByID)
+			return nil
+		})
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	registerMux(h).ServeHTTP(rec, registerReq(adminID, validRegisterBody()))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+}
+
+// --- ChangeRole helpers ---
+
+func changeRoleMux(h *handler.AdminUserHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}/role", h.ChangeRole)
+	return mux
+}
+
+func changeRoleReq(adminID uint, targetID any, role string) *http.Request {
+	b, _ := json.Marshal(map[string]string{"role": role})
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		fmt.Sprintf("/api/v1/admin/users/%v/role", targetID),
+		bytes.NewReader(b),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	return req.WithContext(middleware.WithAuthUser(req.Context(), middleware.AuthUser{
+		ID:   adminID,
+		Role: "admin",
+		Name: "Admin",
+	}))
+}
+
+// --- ChangeRole tests (Cycle 8) ---
+
+func TestAdminUserHandler_ChangeRole_Returns422WhenAdminTargetsOwnID(t *testing.T) {
+	// Spec: admin-users-change-role.yaml — 422 CANNOT_CHANGE_OWN_ROLE checked before any DB call
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(adminID, adminID, "moderator"))
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, "CANNOT_CHANGE_OWN_ROLE", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_Returns400ForNonIntegerID(t *testing.T) {
+	// Spec: admin-users-change-role.yaml border_case "Non-integer :id → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, "abc", "moderator"))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_Returns400ForInvalidRole(t *testing.T) {
+	// Spec: admin-users-change-role.yaml border_case "Invalid role value in body → 400 VALIDATION_ERROR"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, 2, "superuser"))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "VALIDATION_ERROR", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_Returns404WhenUserNotFound(t *testing.T) {
+	// Spec: admin-users-change-role.yaml — 404 USER_NOT_FOUND for missing or soft-deleted
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(99)).Return(model.User{}, repository.ErrNotFound)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, 99, "moderator"))
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "USER_NOT_FOUND", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_Returns409WhenRoleUnchanged(t *testing.T) {
+	// Spec: admin-users-change-role.yaml — 409 ROLE_UNCHANGED prevents silent no-ops
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	target := model.User{Model: gorm.Model{ID: 2}, Role: model.UserRoleModerator}
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(target, nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, 2, "moderator"))
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "ROLE_UNCHANGED", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_Returns200AndClearsTokensOnSuccess(t *testing.T) {
+	// Spec: admin-users-change-role.yaml DoD "access_token_jti and refresh_token_hash cleared in DB"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	target := model.User{Model: gorm.Model{ID: 2}, Name: "Bob", Email: "bob@example.com", Role: model.UserRoleContributor}
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(target, nil)
+	mockUserRepo.EXPECT().UpdateRole(gomock.Any(), uint(2), model.UserRoleModerator).Return(nil)
+	mockUserRepo.EXPECT().ClearTokens(gomock.Any(), uint(2)).Return(nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, 2, "moderator"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "USER_ROLE_CHANGED", responseCode(t, rec))
+}
+
+func TestAdminUserHandler_ChangeRole_WritesAuditLogWithRoleDiff(t *testing.T) {
+	// Spec: admin-users-change-role.yaml rule "Write AuditLog: action=role_changed, diff={role:{before,after}}"
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+	adminID := uint(1)
+	target := model.User{Model: gorm.Model{ID: 2}, Role: model.UserRoleContributor}
+	mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(target, nil)
+	mockUserRepo.EXPECT().UpdateRole(gomock.Any(), uint(2), model.UserRoleModerator).Return(nil)
+	mockUserRepo.EXPECT().ClearTokens(gomock.Any(), uint(2)).Return(nil)
+	mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(model.AuditLog{})).
+		DoAndReturn(func(_ any, log model.AuditLog) error {
+			assert.Equal(t, model.AuditEntityUser, log.EntityType)
+			assert.Equal(t, uint(2), log.EntityID)
+			assert.Equal(t, model.AuditActionRoleChanged, log.Action)
+			assert.Equal(t, adminID, log.ChangedByID)
+			diffStr := string(log.Diff)
+			assert.Contains(t, diffStr, "contributor")
+			assert.Contains(t, diffStr, "moderator")
+			return nil
+		})
+
+	h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+	rec := httptest.NewRecorder()
+	changeRoleMux(h).ServeHTTP(rec, changeRoleReq(adminID, 2, "moderator"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAdminUserHandler_ChangeRole_Returns200ForAllValidRoleTransitions(t *testing.T) {
+	// Spec: admin-users-change-role.yaml border_cases — all 6 allowed transitions
+	transitions := []struct {
+		from model.UserRole
+		to   model.UserRole
+	}{
+		{model.UserRoleContributor, model.UserRoleModerator},
+		{model.UserRoleContributor, model.UserRoleAdmin},
+		{model.UserRoleModerator, model.UserRoleContributor},
+		{model.UserRoleModerator, model.UserRoleAdmin},
+		{model.UserRoleAdmin, model.UserRoleModerator},
+		{model.UserRoleAdmin, model.UserRoleContributor},
+	}
+
+	for _, tc := range transitions {
+		t.Run(fmt.Sprintf("%s_to_%s", tc.from, tc.to), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockUserRepo := mocks.NewMockUserRepository(ctrl)
+			mockAuditRepo := mocks.NewMockAuditRepository(ctrl)
+
+			target := model.User{Model: gorm.Model{ID: 2}, Role: tc.from}
+			mockUserRepo.EXPECT().FindByID(gomock.Any(), uint(2)).Return(target, nil)
+			mockUserRepo.EXPECT().UpdateRole(gomock.Any(), uint(2), tc.to).Return(nil)
+			mockUserRepo.EXPECT().ClearTokens(gomock.Any(), uint(2)).Return(nil)
+			mockAuditRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+
+			h := handler.NewAdminUserHandler(mockUserRepo, mockAuditRepo, testLogger)
+			rec := httptest.NewRecorder()
+			changeRoleMux(h).ServeHTTP(rec, changeRoleReq(1, 2, string(tc.to)))
+
+			assert.Equal(t, http.StatusOK, rec.Code, "transition %s→%s", tc.from, tc.to)
+		})
+	}
 }
 

@@ -1,6 +1,8 @@
 package service_test
 
 // Spec: specs/backend/users-update-password.yaml
+// Spec: specs/backend/admin-users-register.yaml
+// Spec: specs/backend/admin-users-change-role.yaml
 //
 // All functions under test are pure — same input always produces the same output,
 // no I/O, no global state. Tests need no mocks and no database: just input → output.
@@ -12,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/yuryalencar/research-events/internal/model"
 	"github.com/yuryalencar/research-events/internal/service"
 )
 
@@ -127,4 +130,165 @@ func TestHashPassword(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 12, cost)
 	})
+}
+
+// --- ValidateRegisterInput --- (Cycle 2)
+// Spec: admin-users-register.yaml — 400 VALIDATION_ERROR for missing fields, bad role, weak password
+
+func TestValidateRegisterInput_ReturnsNilForValidAdminInput(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "admin")
+	assert.NoError(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsNilForValidModeratorInput(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "moderator")
+	assert.NoError(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForEmptyName(t *testing.T) {
+	err := service.ValidateRegisterInput("", "jane@example.com", "Secret@123", "admin")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForEmptyEmail(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "", "Secret@123", "admin")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForEmptyPassword(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "", "admin")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForEmptyRole(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForContributorRole(t *testing.T) {
+	// Spec: admin-users-register.yaml border_case "role = contributor → 400 VALIDATION_ERROR"
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "contributor")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForInvalidRole(t *testing.T) {
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "superuser")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_ReturnsErrorForWeakPassword(t *testing.T) {
+	// Spec: admin-users-register.yaml — same complexity rules as ValidatePasswordComplexity
+	err := service.ValidateRegisterInput("Jane", "jane@example.com", "weakpass", "admin")
+	assert.Error(t, err)
+}
+
+func TestValidateRegisterInput_IsPure_SameInputReturnsSameOutput(t *testing.T) {
+	// FP: pure function — deterministic, no hidden state
+	err1 := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "admin")
+	err2 := service.ValidateRegisterInput("Jane", "jane@example.com", "Secret@123", "admin")
+	assert.Equal(t, err1, err2)
+}
+
+// --- BuildRegisterUser --- (Cycle 3)
+// Spec: admin-users-register.yaml DoD "Returns 201 + user data on valid registration"
+
+func TestBuildRegisterUser_SetsAllFieldsCorrectly(t *testing.T) {
+	hash := "bcrypt-hash"
+	u := service.BuildRegisterUser("Jane", "jane@example.com", hash, model.UserRoleModerator)
+
+	assert.Equal(t, "Jane", u.Name)
+	assert.Equal(t, "jane@example.com", u.Email)
+	require.NotNil(t, u.PasswordHash)
+	assert.Equal(t, hash, *u.PasswordHash)
+	assert.Equal(t, model.UserRoleModerator, u.Role)
+}
+
+func TestBuildRegisterUser_IsPure_SameInputReturnsSameOutput(t *testing.T) {
+	// FP: pure function — same args, same struct back, every time
+	hash := "bcrypt-hash"
+	u1 := service.BuildRegisterUser("Jane", "jane@example.com", hash, model.UserRoleModerator)
+	u2 := service.BuildRegisterUser("Jane", "jane@example.com", hash, model.UserRoleModerator)
+	assert.Equal(t, u1, u2)
+}
+
+// --- BuildRegisterAuditLog --- (Cycle 4)
+// Spec: admin-users-register.yaml rule "Write AuditLog: entity_type=user, action=created, diff={name,email,role}"
+
+func TestBuildRegisterAuditLog_SetsEntityTypeUser(t *testing.T) {
+	entry := service.BuildRegisterAuditLog(10, 1, "Jane", "jane@example.com", model.UserRoleModerator)
+	assert.Equal(t, model.AuditEntityUser, entry.EntityType)
+}
+
+func TestBuildRegisterAuditLog_SetsActionCreated(t *testing.T) {
+	entry := service.BuildRegisterAuditLog(10, 1, "Jane", "jane@example.com", model.UserRoleModerator)
+	assert.Equal(t, model.AuditActionCreated, entry.Action)
+}
+
+func TestBuildRegisterAuditLog_SetsDiffWithNameEmailAndRole(t *testing.T) {
+	entry := service.BuildRegisterAuditLog(10, 1, "Jane", "jane@example.com", model.UserRoleModerator)
+	diffStr := string(entry.Diff)
+	assert.Contains(t, diffStr, "jane@example.com")
+	assert.Contains(t, diffStr, "Jane")
+	assert.Contains(t, diffStr, "moderator")
+}
+
+func TestBuildRegisterAuditLog_IsPure_SameInputReturnsSameOutput(t *testing.T) {
+	e1 := service.BuildRegisterAuditLog(10, 1, "Jane", "jane@example.com", model.UserRoleModerator)
+	e2 := service.BuildRegisterAuditLog(10, 1, "Jane", "jane@example.com", model.UserRoleModerator)
+	assert.Equal(t, e1, e2)
+}
+
+// --- ValidateRoleChangeInput --- (Cycle 5)
+// Spec: admin-users-change-role.yaml — role must be admin|moderator|contributor
+
+func TestValidateRoleChangeInput_AcceptsAdmin(t *testing.T) {
+	assert.NoError(t, service.ValidateRoleChangeInput("admin"))
+}
+
+func TestValidateRoleChangeInput_AcceptsModerator(t *testing.T) {
+	assert.NoError(t, service.ValidateRoleChangeInput("moderator"))
+}
+
+func TestValidateRoleChangeInput_AcceptsContributor(t *testing.T) {
+	assert.NoError(t, service.ValidateRoleChangeInput("contributor"))
+}
+
+func TestValidateRoleChangeInput_RejectsEmptyRole(t *testing.T) {
+	assert.Error(t, service.ValidateRoleChangeInput(""))
+}
+
+func TestValidateRoleChangeInput_RejectsInvalidRole(t *testing.T) {
+	assert.Error(t, service.ValidateRoleChangeInput("superuser"))
+}
+
+func TestValidateRoleChangeInput_IsPure_SameInputReturnsSameOutput(t *testing.T) {
+	e1 := service.ValidateRoleChangeInput("moderator")
+	e2 := service.ValidateRoleChangeInput("moderator")
+	assert.Equal(t, e1, e2)
+}
+
+// --- BuildRoleChangedAuditLog --- (Cycle 6)
+// Spec: admin-users-change-role.yaml rule "Write AuditLog: action=role_changed, diff={role:{before,after}}"
+
+func TestBuildRoleChangedAuditLog_SetsEntityTypeUser(t *testing.T) {
+	entry := service.BuildRoleChangedAuditLog(42, 1, model.UserRoleContributor, model.UserRoleModerator)
+	assert.Equal(t, model.AuditEntityUser, entry.EntityType)
+}
+
+func TestBuildRoleChangedAuditLog_SetsActionRoleChanged(t *testing.T) {
+	entry := service.BuildRoleChangedAuditLog(42, 1, model.UserRoleContributor, model.UserRoleModerator)
+	assert.Equal(t, model.AuditActionRoleChanged, entry.Action)
+}
+
+func TestBuildRoleChangedAuditLog_SetsDiffWithBeforeAndAfterRole(t *testing.T) {
+	entry := service.BuildRoleChangedAuditLog(42, 1, model.UserRoleContributor, model.UserRoleModerator)
+	diffStr := string(entry.Diff)
+	assert.Contains(t, diffStr, "contributor")
+	assert.Contains(t, diffStr, "moderator")
+}
+
+func TestBuildRoleChangedAuditLog_IsPure_SameInputReturnsSameOutput(t *testing.T) {
+	e1 := service.BuildRoleChangedAuditLog(42, 1, model.UserRoleContributor, model.UserRoleModerator)
+	e2 := service.BuildRoleChangedAuditLog(42, 1, model.UserRoleContributor, model.UserRoleModerator)
+	assert.Equal(t, e1, e2)
 }

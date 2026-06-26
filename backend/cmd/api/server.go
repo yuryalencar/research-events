@@ -120,6 +120,26 @@ func BuildHandler(cfg config.Config, db *gorm.DB, registry *health.Registry, log
 	)
 
 	// Admin-only endpoints — RequireAuth then RequireRole("admin").
+	mux.Handle("POST /api/v1/admin/users",
+		rateLimiter.Limit(
+			authMiddleware.RequireAuth(
+				middleware.RequireRole("admin")(
+					http.HandlerFunc(adminUserHandler.Register),
+				),
+			),
+		),
+	)
+
+	mux.Handle("PATCH /api/v1/admin/users/{id}/role",
+		rateLimiter.Limit(
+			authMiddleware.RequireAuth(
+				middleware.RequireRole("admin")(
+					http.HandlerFunc(adminUserHandler.ChangeRole),
+				),
+			),
+		),
+	)
+
 	mux.Handle("PATCH /api/v1/admin/users/{id}/unlock",
 		authMiddleware.RequireAuth(
 			middleware.RequireRole("admin")(

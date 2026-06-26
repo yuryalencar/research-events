@@ -1,10 +1,13 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"unicode"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/yuryalencar/research-events/internal/model"
 )
 
 // --- Public functions ---
@@ -53,6 +56,81 @@ func ValidatePasswordComplexity(password string) error {
 	}
 
 	return nil
+}
+
+// FP: pure function
+// ValidateRegisterInput checks all four registration fields in one pass.
+// Combining field-presence and role-validity here keeps the handler thin: one call, one error.
+// Contributor is explicitly rejected because contributors self-register via event submission.
+func ValidateRegisterInput(name, email, password, role string) error {
+	if name == "" || email == "" || password == "" || role == "" {
+		return errors.New("name, email, password and role are required")
+	}
+	if role != string(model.UserRoleAdmin) && role != string(model.UserRoleModerator) {
+		return errors.New("role must be one of: admin, moderator")
+	}
+	return ValidatePasswordComplexity(password)
+}
+
+// FP: immutability
+// BuildRegisterUser constructs a new User value from validated inputs.
+// It never mutates any argument — the caller receives a fresh struct to hand to the repository.
+func BuildRegisterUser(name, email, passwordHash string, role model.UserRole) model.User {
+	return model.User{
+		Name:         name,
+		Email:        email,
+		PasswordHash: &passwordHash,
+		Role:         role,
+	}
+}
+
+// FP: no side effects
+// BuildRegisterAuditLog computes the AuditLog entry for a new user registration.
+// The diff records the initial values so the audit trail is self-contained.
+// Persistence is the handler's responsibility — this function only builds the value.
+func BuildRegisterAuditLog(newUserID, adminID uint, name, email string, role model.UserRole) model.AuditLog {
+	diff, _ := json.Marshal(map[string]any{
+		"name":  name,
+		"email": email,
+		"role":  string(role),
+	})
+	return model.AuditLog{
+		EntityType:  model.AuditEntityUser,
+		EntityID:    newUserID,
+		Action:      model.AuditActionCreated,
+		ChangedByID: adminID,
+		Diff:        model.JSONB(diff),
+	}
+}
+
+// FP: pure function
+// ValidateRoleChangeInput checks that the requested role is one of the three valid values.
+// Unlike ValidateRegisterInput, contributor is allowed here — it is a valid downgrade target.
+func ValidateRoleChangeInput(role string) error {
+	switch model.UserRole(role) {
+	case model.UserRoleAdmin, model.UserRoleModerator, model.UserRoleContributor:
+		return nil
+	}
+	return errors.New("role must be one of: admin, moderator, contributor")
+}
+
+// FP: no side effects
+// BuildRoleChangedAuditLog computes the AuditLog entry for a role change operation.
+// The diff captures the before/after transition so history is fully reconstructible.
+func BuildRoleChangedAuditLog(targetID, adminID uint, oldRole, newRole model.UserRole) model.AuditLog {
+	diff, _ := json.Marshal(map[string]any{
+		"role": map[string]string{
+			"before": string(oldRole),
+			"after":  string(newRole),
+		},
+	})
+	return model.AuditLog{
+		EntityType:  model.AuditEntityUser,
+		EntityID:    targetID,
+		Action:      model.AuditActionRoleChanged,
+		ChangedByID: adminID,
+		Diff:        model.JSONB(diff),
+	}
 }
 
 // FP: no side effects

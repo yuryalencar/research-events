@@ -56,6 +56,36 @@ func (mr *MockUserRepositoryMockRecorder) ClearTokens(ctx, userID any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearTokens", reflect.TypeOf((*MockUserRepository)(nil).ClearTokens), ctx, userID)
 }
 
+// Create mocks base method.
+func (m *MockUserRepository) Create(ctx context.Context, user model.User) (model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, user)
+	ret0, _ := ret[0].(model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockUserRepositoryMockRecorder) Create(ctx, user any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserRepository)(nil).Create), ctx, user)
+}
+
+// ExistsByEmail mocks base method.
+func (m *MockUserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExistsByEmail", ctx, email)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExistsByEmail indicates an expected call of ExistsByEmail.
+func (mr *MockUserRepositoryMockRecorder) ExistsByEmail(ctx, email any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsByEmail", reflect.TypeOf((*MockUserRepository)(nil).ExistsByEmail), ctx, email)
+}
+
 // FindByEmail mocks base method.
 func (m *MockUserRepository) FindByEmail(ctx context.Context, email string) (model.User, error) {
 	m.ctrl.T.Helper()
@@ -154,6 +184,20 @@ func (m *MockUserRepository) UpdatePassword(ctx context.Context, userID uint, ne
 func (mr *MockUserRepositoryMockRecorder) UpdatePassword(ctx, userID, newHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePassword", reflect.TypeOf((*MockUserRepository)(nil).UpdatePassword), ctx, userID, newHash)
+}
+
+// UpdateRole mocks base method.
+func (m *MockUserRepository) UpdateRole(ctx context.Context, userID uint, newRole model.UserRole) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateRole", ctx, userID, newRole)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateRole indicates an expected call of UpdateRole.
+func (mr *MockUserRepositoryMockRecorder) UpdateRole(ctx, userID, newRole any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRole", reflect.TypeOf((*MockUserRepository)(nil).UpdateRole), ctx, userID, newRole)
 }
 
 // UpdateTokens mocks base method.

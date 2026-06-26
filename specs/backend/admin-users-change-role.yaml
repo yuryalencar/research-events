@@ -1,0 +1,111 @@
+endpoint: PATCH /api/v1/admin/users/:id/role
+
+description: >
+  Changes the role of an existing user. Supports any transition: contributor ↔ moderator,
+  contributor/moderator → admin, admin → contributor/moderator. An admin cannot change
+  their own role — a second admin must perform the change. On success the target user's
+  active session tokens are invalidated, forcing a re-login under the new role.
+
+path_params:
+  id: integer (user ID whose role is being changed)
+
+request:
+  body:
+    role: string (required) — one of: "admin", "moderator", "contributor"
+
+responses:
+  200:
+    code: USER_ROLE_CHANGED
+    body:
+      code: USER_ROLE_CHANGED
+      data:
+        user:
+          id: integer
+          name: string
+          email: string
+          role: string  # the NEW role
+
+  400:
+    code: VALIDATION_ERROR
+    body:
+      code: VALIDATION_ERROR
+      error: { message: "..." }
+    note: Non-integer :id or missing/invalid role value in request body.
+
+  401:
+    note: Standard RequireAuth responses (TOKEN_MISSING / TOKEN_EXPIRED / TOKEN_INVALID)
+
+  403:
+    code: FORBIDDEN
+    body:
+      code: FORBIDDEN
+      error: { message: "insufficient permissions" }
+    note: Returned when caller is not an admin.
+
+  404:
+    code: USER_NOT_FOUND
+    body:
+      code: USER_NOT_FOUND
+      error: { message: "user not found" }
+    note: Returned for both non-existent and soft-deleted users.
+
+  409:
+    code: ROLE_UNCHANGED
+    body:
+      code: ROLE_UNCHANGED
+      error: { message: "user already has role '<role>'" }
+    note: >
+      Returned when requested role equals the user's current role. Prevents silent
+      no-ops and makes intent explicit — same pattern as USER_NOT_LOCKED on the unlock endpoint.
+
+  422:
+    code: CANNOT_CHANGE_OWN_ROLE
+    body:
+      code: CANNOT_CHANGE_OWN_ROLE
+      error: { message: "admins cannot change their own role" }
+
+rules:
+  - Requires admin role (RequireAuth + RequireRole("admin"))
+  - Compare :id to authenticated admin's ID — if equal → 422 CANNOT_CHANGE_OWN_ROLE
+    (checked first, before any DB lookup)
+  - :id must be a valid integer — 400 VALIDATION_ERROR otherwise
+  - role in body must be one of "admin", "moderator", "contributor" — 400 VALIDATION_ERROR otherwise
+  - Target user must exist and not be soft-deleted — 404 USER_NOT_FOUND if missing or deleted
+  - If requested role == current role → 409 ROLE_UNCHANGED
+  - On success: update user.role, clear access_token_jti, access_token_expires_at,
+    refresh_token_hash, refresh_token_expires_at (reuses ClearTokens from UserRepository)
+  - Write AuditLog: entity_type="user", entity_id=:id, action="role_changed",
+    diff={"role": {"before": "<old_role>", "after": "<new_role>"}}, changed_by_id=admin ID
+  - Rate-limited at 10 requests/minute/IP — same as the existing admin rate limiter
+
+permissions:
+  - admin role only
+  - moderator → 403 FORBIDDEN
+  - admin cannot change their own role → 422 CANNOT_CHANGE_OWN_ROLE
+
+border_cases:
+  - contributor → moderator → 200 USER_ROLE_CHANGED
+  - contributor → admin → 200 USER_ROLE_CHANGED
+  - moderator → contributor → 200 USER_ROLE_CHANGED
+  - moderator → admin → 200 USER_ROLE_CHANGED
+  - admin → moderator (different admin) → 200 USER_ROLE_CHANGED
+  - admin → contributor (different admin) → 200 USER_ROLE_CHANGED
+  - Admin targets their own ID → 422 CANNOT_CHANGE_OWN_ROLE
+  - Requested role same as current role → 409 ROLE_UNCHANGED
+  - Target user not found → 404 USER_NOT_FOUND
+  - Target user is soft-deleted → 404 USER_NOT_FOUND
+  - Non-integer :id → 400 VALIDATION_ERROR
+  - Invalid role value in body (e.g. "superuser") → 400 VALIDATION_ERROR
+  - Moderator attempts role change → 403 FORBIDDEN
+  - Target user's tokens are cleared in DB on success (verified in test)
+
+definition_of_done:
+  - Returns 200 + user data (with new role) on valid role change
+  - access_token_jti and refresh_token_hash cleared in DB on success
+  - AuditLog written with action "role_changed" and diff={role:{before,after}}
+  - Returns 422 CANNOT_CHANGE_OWN_ROLE when admin targets own ID
+  - Returns 409 ROLE_UNCHANGED when requested role equals current role
+  - Returns 404 USER_NOT_FOUND for missing or soft-deleted target
+  - Returns 400 VALIDATION_ERROR for invalid role or non-integer :id
+  - Returns 403 FORBIDDEN for moderator caller
+  - All border cases have a corresponding test

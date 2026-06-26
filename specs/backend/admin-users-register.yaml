@@ -1,0 +1,105 @@
+endpoint: POST /api/v1/admin/users
+
+description: >
+  Registers a new fully-authenticated user (admin or moderator) on behalf of an admin.
+  Unlike the public contributor flow (passwordless, created via event submission),
+  this creates a user with a password and an explicit role from the start.
+  Contributors are excluded — they register themselves via the event submission flow
+  and have no platform permissions requiring admin provisioning.
+  Only admins can call this endpoint.
+
+request:
+  body:
+    name:     string (required)
+    email:    string (required)
+    password: string (required)
+    role:     string (required) — one of: "admin", "moderator"
+                                  "contributor" is rejected — contributors register
+                                  themselves via the event submission flow.
+
+responses:
+  201:
+    code: USER_REGISTERED
+    body:
+      code: USER_REGISTERED
+      data:
+        user:
+          id: integer
+          name: string
+          email: string
+          role: string
+          created_at: string (ISO 8601)
+
+  400:
+    code: VALIDATION_ERROR
+    body:
+      code: VALIDATION_ERROR
+      error: { message: "..." }
+    note: >
+      Returned when any required field is missing, role is not "admin" or "moderator"
+      (including "contributor"), or password does not meet complexity requirements.
+
+  401:
+    note: Standard RequireAuth responses (TOKEN_MISSING / TOKEN_EXPIRED / TOKEN_INVALID)
+
+  403:
+    code: FORBIDDEN
+    body:
+      code: FORBIDDEN
+      error: { message: "insufficient permissions" }
+    note: Returned when caller is not an admin.
+
+  409:
+    code: EMAIL_ALREADY_EXISTS
+    body:
+      code: EMAIL_ALREADY_EXISTS
+      error: { message: "a user with this email already exists" }
+    note: >
+      Returned when email is already taken by any user, including soft-deleted ones.
+      The users table has a full unique index on email — soft-deleted rows still
+      occupy the email slot, so a DB constraint violation would occur either way.
+      The handler checks this explicitly before attempting to insert.
+
+rules:
+  - Requires admin role (RequireAuth + RequireRole("admin"))
+  - All four fields (name, email, password, role) are required — 400 if any is empty or missing
+  - role must be one of "admin", "moderator" — 400 VALIDATION_ERROR for any other value,
+    including "contributor"
+  - Password must meet complexity rules: min 8 chars, ≥1 uppercase, ≥1 lowercase, ≥1 special char
+    (same rule enforced by ValidatePasswordComplexity in internal/service/user.go)
+  - Password hashed with bcrypt at cost 12 before storing — never store plaintext
+  - Email uniqueness checked against ALL users (including soft-deleted) — 409 if taken
+  - Write AuditLog: entity_type="user", entity_id=new user ID, action="created",
+    changed_by_id=admin ID, diff={"name": name, "email": email, "role": role}
+  - No token fields set on creation (new user has no active session)
+  - Rate-limited at 10 requests/minute/IP — same as the existing admin rate limiter
+
+permissions:
+  - admin role only
+  - moderator → 403 FORBIDDEN
+
+border_cases:
+  - Missing name → 400 VALIDATION_ERROR
+  - Missing email → 400 VALIDATION_ERROR
+  - Missing password → 400 VALIDATION_ERROR
+  - Missing role → 400 VALIDATION_ERROR
+  - role = "contributor" → 400 VALIDATION_ERROR
+  - role = "superuser" → 400 VALIDATION_ERROR
+  - Password does not meet complexity requirements → 400 VALIDATION_ERROR
+  - Email already taken by an active user → 409 EMAIL_ALREADY_EXISTS
+  - Email already taken by a soft-deleted user → 409 EMAIL_ALREADY_EXISTS
+  - Admin registers another admin → 201 USER_REGISTERED (allowed)
+  - Admin registers a moderator → 201 USER_REGISTERED (allowed)
+  - Moderator attempts registration → 403 FORBIDDEN
+
+definition_of_done:
+  - Returns 201 + user data on valid registration
+  - Password stored as bcrypt hash at cost 12 — never plaintext (verified in test)
+  - AuditLog row written with action "created" and diff
+  - Returns 409 EMAIL_ALREADY_EXISTS for email taken by any user (active or soft-deleted)
+  - Returns 400 VALIDATION_ERROR for missing fields
+  - Returns 400 VALIDATION_ERROR when role is "contributor"
+  - Returns 400 VALIDATION_ERROR for any invalid role value
+  - Returns 400 VALIDATION_ERROR for weak password
+  - Returns 403 FORBIDDEN for moderator caller
+  - All border cases have a corresponding test

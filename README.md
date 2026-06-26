@@ -197,6 +197,7 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | 2026-06-22 | [Year Filter: "From Year" Semantics](ai-sessions/2026-06-22-year-filter-from-semantics.md) | `?year=2026` now returns year >= 2026; omitting year returns all events. Backend: `*int` nullable year + updated `firstDeadlineMonth` subquery. Frontend: `number \| undefined` year type, globe locks year (min = currentYear−2), submission page min = currentYear, "From year" label in all 4 locales. 278 tests. |
 | 2026-06-24 | [Globe Event Clustering (Frontend)](ai-sessions/2026-06-24-globe-event-clustering.md) | `supercluster` groups nearby pins into violet cluster pins (dynamic, zoom-aware); clicking opens a multi-event drawer immediately. New `useGlobeClusters` hook, `altitudeToZoom` pure function, `ClusterEventDrawer` (Dialog/Drawer responsive). InfoModal violet legend row. 4 new i18n keys across all locales. 299 tests. |
 | 2026-06-24 | [Globe Loading Message Progression (Frontend)](ai-sessions/2026-06-24-globe-loading-progression.md) | `useLoadingMessage` hook cycles through 4 messages while the backend cold-starts: "Loading events…" → "Waking up our server…" → "First load takes a moment…" → "Almost there, hang tight…". 2500ms initial delay, 1500ms between steps, resets on re-fetch. 307 tests. |
+| 2026-06-26 | [Admin User Management — Backend](ai-sessions/2026-06-26-admin-user-management.md) | `POST /api/v1/admin/users` (register admin/moderator) + `PATCH /api/v1/admin/users/{id}/role` (role change with session invalidation). `ExistsByEmail`, `Create`, `UpdateRole` in repository; 5 FP service functions; `AuditActionRoleChanged`. 458 backend tests. |
 
 ## Specs
 
@@ -235,6 +236,8 @@ make generate-types     # regenerate frontend types from OpenAPI spec
 | Year filter — "from year" semantics (Frontend) | [year-filter-from-semantics.md](specs/frontend/year-filter-from-semantics.md) | Done |
 | Globe Event Clustering (Frontend) | [globe-event-clustering.md](specs/frontend/globe-event-clustering.md) | Done |
 | Globe Loading Message Progression (Frontend) | [globe-loading-progression.md](specs/frontend/globe-loading-progression.md) | Done |
+| Admin: Register User | [admin-users-register.yaml](specs/backend/admin-users-register.yaml) | Done |
+| Admin: Change User Role | [admin-users-change-role.yaml](specs/backend/admin-users-change-role.yaml) | Done |
 
 ---
 
