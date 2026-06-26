@@ -34,6 +34,11 @@ const EXPECTED_KEYS = [
   "INTERNAL_ERROR",
   "NETWORK_ERROR",
   "UNKNOWN",
+  "EMAIL_ALREADY_EXISTS",
+  "CANNOT_CHANGE_OWN_PASSWORD",
+  "PASSWORD_TOO_WEAK",
+  "ROLE_UNCHANGED",
+  "CANNOT_CHANGE_OWN_ROLE",
 ].sort()
 
 describe("errors namespace i18n key parity", () => {
