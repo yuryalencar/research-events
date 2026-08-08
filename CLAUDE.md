@@ -1125,6 +1125,7 @@ Note: all feature contracts live in the spec files — no separate `docs/` folde
   - `test:` commits should appear **before** the `feat:` commit they enable (Red before Green)
 - One logical change per commit — never bundle unrelated files
 - PRs require the full commit gate to pass (see TDD section)
+- **Never add a `Co-Authored-By: Claude` trailer to commit messages** — commit as the human author only
 
 ---
 
